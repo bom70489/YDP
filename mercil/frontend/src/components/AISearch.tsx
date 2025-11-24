@@ -12,7 +12,6 @@ const AISearch = () => {
   const { search } = context
 
   const handleSearch = () => {
-    console.log("AISearch ส่งคำค้นหา:", searchText);
     if (searchText.trim()) search(searchText)
   };
 

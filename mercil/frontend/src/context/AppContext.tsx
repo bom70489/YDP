@@ -36,8 +36,6 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         params: { q: query }
       });
 
-      console.log("AI Search response:", res.data);
-
       const mapped = res.data.map((item: any) => ({
         _id: item._id || item.id?.toString(),
         title: item.name_th,
@@ -52,11 +50,10 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         image: item.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be"
       }));
 
-      console.log("Mapped properties:", mapped);
       setProperties(mapped);
 
       const token = localStorage.getItem("token");
-      console.log("Token ที่ส่งไป:", token);
+
       if (token) {
         await axios.post("http://localhost:4000/api/user/saveSearch",
           { query } , { headers: {
@@ -64,7 +61,13 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         );
+      } 
+
+      if(!token) {
+        console.log("Sending search to backend:", query);
+        await axios.post("http://localhost:4000/api/user/guestSearch", { query })
       }
+
     } catch (err) {
       console.error(err);
     } finally {

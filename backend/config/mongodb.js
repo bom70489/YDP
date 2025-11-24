@@ -6,6 +6,10 @@ const connectDb = async () => {
         console.log("CB Connect");
     })
 
+    mongoose.connection.on('error', (err) => {
+        console.error('MongoDB connection error:', err);
+    });
+
     await mongoose.connect(`${process.env.MONGODB}/assets`)
 
 }

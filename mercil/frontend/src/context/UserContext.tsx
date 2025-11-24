@@ -1,5 +1,6 @@
 import { createContext, useState, type ReactNode , useEffect } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
 interface AuthContextType {
   user: { name: string; token: string } | null;
@@ -50,6 +51,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('username');
+
+    toast.success("Logout Successfully!")
   };
 
   return (

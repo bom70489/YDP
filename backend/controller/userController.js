@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken'
 import validator from 'validator'
 import bcrypt from 'bcrypt'
 import userModel from '../model/userModel.js'
+import guestSearchModel from '../model/guestModel.js'
 
 const createToken = (id) => {
     return jwt.sign({ id } , process.env.JWT_SECRET , { expiresIn : '7d' })
@@ -80,9 +81,29 @@ const saveSearch = async (req, res) => {
     await req.user.save();
     res.json({ success: true });
 
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+  } catch (error) {
+    res.json({success : false , message : error.message})
   }
 };
 
-export { register , loginUser , saveSearch}
+const guestsearch = async (req , res) => {
+    try {
+        const { query } = req.body;
+        await guestSearchModel.create({ query });
+        
+        const count = await guestSearchModel.countDocuments();
+
+        if (count > 100) {
+        const oldest = await guestSearchModel.find().sort({ timestamp: 1 }).limit(count - 100);
+        const idsToDelete = oldest.map(item => item._id);
+        await guestSearchModel.deleteMany({ _id: { $in: idsToDelete } });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.json({success : false , message : error.message})
+    }
+    
+}
+
+export { register , loginUser , saveSearch , guestsearch}
