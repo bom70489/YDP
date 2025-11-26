@@ -1,4 +1,3 @@
-# new
 import os
 import json
 import asyncio
@@ -89,15 +88,31 @@ async def _gemini_rerank(prompt: str) -> str:
     )
 
 @app.get("/hybrid_search")
-async def hybrid_search(query: str = Query(..., description="คำค้นหา"), top_k: int = 10):
+async def hybrid_search(
+    query: str = Query(..., description="คำค้นหา"),
+    top_k: int = 10,
+    min_price: float | None = None,
+    max_price: float | None = None
+    ):
     text_query, asset_type_ids = extract_query_filters(query)
     
-    query_emb = await embed_text(text_query or query)
+    query_text_for_embedding = text_query or query or "ทั้งหมด"
+    query_emb = await embed_text(query_text_for_embedding)
 
     mongo_filter = {}
-    
+
+    # กรองตามประเภททรัพย์สิน
     if asset_type_ids:
         mongo_filter["asset_type_id"] = {"$in": asset_type_ids}
+
+    # กรองตามราคาขาย
+    price_filter = {}
+    if min_price is not None:
+        price_filter["$gte"] = float(min_price)
+    if max_price is not None:
+        price_filter["$lte"] = float(max_price)
+    if price_filter:
+        mongo_filter["asset_details_selling_price"] = price_filter
 
     num_candidates = max(top_k * 5, 50)
     pipeline_params = {
@@ -105,8 +120,10 @@ async def hybrid_search(query: str = Query(..., description="คำค้นห�
         "path": "asset_vector",
         "queryVector": query_emb,
         "numCandidates": num_candidates,
-        "limit": num_candidates
+        "limit": num_candidates,
+        "filter": mongo_filter,
     }
+
     if mongo_filter:
         pipeline_params["filter"] = mongo_filter
 
@@ -127,9 +144,21 @@ async def hybrid_search(query: str = Query(..., description="คำค้นห�
     ])
     candidates = await cursor.to_list(length=num_candidates)
 
+    if min_price is not None or max_price is not None:
+        filtered = []
+        for doc in candidates:
+            price = doc.get("asset_details_selling_price", 0)
+            if min_price is not None and price < min_price:
+                continue
+            if max_price is not None and price > max_price:
+                continue
+            filtered.append(doc)
+        candidates = filtered
+
     if not candidates:
         return {"query": query, "results": []}
 
+    # Rerank ด้วย Gemini (เหมือนเดิม)
     rerank_count = min(max(3 * top_k, 10), len(candidates))
     to_rerank = candidates[:rerank_count]
 
@@ -137,8 +166,8 @@ async def hybrid_search(query: str = Query(..., description="คำค้นห�
     prompt += f"User query: \"{query}\"\nCandidates:\n"
     for idx, doc in enumerate(to_rerank):
         desc = doc.get("ai_description_th", "")[:1000]
-        prompt += f"{doc.get('id')}. {doc.get('name_th','N/A')} – {desc}\n"
-    prompt += f"Score each document between 0.0 and 1.0 and output JSON array like: [{{\"id\":1,\"score\":0.92}}, ...]"
+        prompt += f"{idx+1}. {doc.get('name_th','N/A')} – {desc}\n"
+    prompt += "Score each document between 0.0 and 1.0 and output JSON array like: [{\"id\":1,\"score\":0.92}, ...]"
 
     scores_map = {}
     try:
@@ -152,11 +181,10 @@ async def hybrid_search(query: str = Query(..., description="คำค้นห�
     for idx, doc in enumerate(candidates):
         doc["_rerank_score"] = scores_map.get(idx + 1, doc.get("score", 0.0))
         doc["_id"] = str(doc["_id"])
-        doc["_rerank_score"] = scores_map.get(idx + 1, doc.get("score", 0.0))
         doc["bedrooms"] = doc.get("asset_details_number_of_bedrooms", 0)
         doc["bathrooms"] = doc.get("asset_details_number_of_bathrooms", 0)
         doc["description"] = doc.get("ai_description_th", 0)
-        doc["area"] = doc.get("asset_details_total_area", 0)
+        doc["area"] = doc.get("asset_details_land_size", 0)
         doc["location"] = doc.get("location_village_th", "ไม่มีที่อยู่")
         doc["image"] = doc.get("image", "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D")
 

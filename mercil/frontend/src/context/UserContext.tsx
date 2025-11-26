@@ -33,7 +33,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   setUser({ name: res.data.username, token: res.data.token });
   localStorage.setItem('token', res.data.token);
   localStorage.setItem('username', res.data.username);
-
   };
 
   const login = async (email: string, password: string) => {
