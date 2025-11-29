@@ -62,15 +62,15 @@ const Navbar = () => {
             {/* Desktop Menu */}
             <ul className="hidden md:flex items-center space-x-2 font-medium">
               {[
-                { name: "หน้าหลัก", icon: Home },
-                { name: "ทรัพย์สิน", icon: Building2 },
-                { name: "เกี่ยวกับ", icon: Info },
-                { name: "รายการโปรด", icon: Heart },
-                { name: "ติดต่อ", icon: Mail },
+                { name: "หน้าหลัก", icon: Home , link: '/'},
+                { name: "ทรัพย์สิน", icon: Building2 , link: '#'},
+                { name: "เกี่ยวกับ", icon: Info , link: '#'},
+                ...(user ? [{ name: "รายการโปรด", icon: Heart, link: '/favorite' }] : []),
+                { name: "ติดต่อ", icon: Mail , link: '#'},
               ].map((item) => (
                 <li key={item.name} className="group/item relative">
                   <a
-                    href="#"
+                    href={item.link || '#'}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-[#583c2a] transition-all duration-150 group-hover/item:bg-[#e8dfda] group-hover/item:text-[#a16545]"
                   >
                     <item.icon className="w-4 h-4" />

@@ -228,26 +228,27 @@ async def hybrid_search(
         
         candidates = filtered
     
+    
     if has_area_filter:
         print(f"\n--- Area Filtering ---")
         print(f"Min area: {min_area}, Max area: {max_area}")
 
+        before_count = len(candidates)  
         filtered_area = []
+        
         for doc in candidates:
             area = doc.get("asset_details_land_size", 0)
 
-            # แปลงเป็น float
             if isinstance(area, str):
                 try:
                     area = float(area.replace(',', '').strip())
-                    doc["asset_details_land_size"] = area  # อัพเดทค่าใน doc
+                    doc["asset_details_land_size"] = area  
                 except:
                     print(f"Warning: Cannot convert area '{area}' to float")
                     area = 0
             elif area is None:
                 area = 0
 
-            # ตรวจสอบช่วง area
             if min_area is not None and area < min_area:
                 continue
             if max_area is not None and area > max_area:
@@ -255,7 +256,8 @@ async def hybrid_search(
 
             filtered_area.append(doc)
 
-        print(f"Before area filter: {len(candidates)} | After: {len(filtered_area)}")
+    
+        print(f"Before area filter: {before_count} | After: {len(filtered_area)}")
         candidates = filtered_area
 
     if not candidates:
@@ -326,7 +328,6 @@ async def get_property(property_id: str):
             print(f"Property not found: {property_id}")
             raise HTTPException(status_code=404, detail="Property not found")
 
-        # ✅ ฟังก์ชันช่วยแปลงเป็น float อย่างปลอดภัย
         def safe_float(value, default=0.0):
             """แปลงค่าเป็น float อย่างปลอดภัย"""
             if value is None:

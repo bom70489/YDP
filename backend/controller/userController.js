@@ -106,4 +106,75 @@ const guestsearch = async (req , res) => {
     
 }
 
-export { register , loginUser , saveSearch , guestsearch}
+const addFavorite = async (req, res) => {
+    try {
+        const { propertyId } = req.body;
+        if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        // ตรวจสอบว่ามีอยู่แล้วหรือไม่
+        const user = await userModel.findById(req.user._id);
+        const exists = user.favorites.some(fav => fav.propertyId === propertyId);
+
+        if (exists) {
+            return res.json({ success: false, message: 'Already in favorites' });
+        }
+
+        // เพิ่มเข้า favorites
+        await userModel.findByIdAndUpdate(req.user._id, {
+            $push: { favorites: { propertyId, addedAt: new Date() } }
+        });
+
+        res.json({ success: true, message: 'Added to favorites' });
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+
+const removeFavorite = async (req, res) => {
+    try {
+        const { propertyId } = req.body;
+        if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        await userModel.findByIdAndUpdate(req.user._id, {
+            $pull: { favorites: { propertyId } }
+        });
+
+        res.json({ success: true, message: 'Removed from favorites' });
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+
+const getFavorites = async (req, res) => {
+    try {
+        if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        const user = await userModel.findById(req.user._id).select('favorites');
+        res.json({ success: true, favorites: user.favorites });
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+
+const checkFavorite = async (req, res) => {
+    try {
+        const { propertyId } = req.params;
+        if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+        const user = await userModel.findById(req.user._id);
+        const isFavorite = user.favorites.some(fav => fav.propertyId === propertyId);
+
+        res.json({ success: true, isFavorite });
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export { register , loginUser , saveSearch , guestsearch , addFavorite , removeFavorite , getFavorites , checkFavorite}

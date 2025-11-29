@@ -1,7 +1,10 @@
-import { useContext } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { MapPin, Bed, Bath, Maximize, Heart, Star } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom'; // ✅ เพิ่ม useLocation
+import { Link, useLocation } from 'react-router-dom';
 import { SearchContext } from '../context/AppContext';
+import { AuthContext } from '../context/UserContext';
+import axios from 'axios';
+import { toast } from 'react-toastify';
 
 interface Property {
   _id?: string;
@@ -22,7 +25,89 @@ interface PropertyCardProps {
 }
 
 const PropertyCard = ({ property }: PropertyCardProps) => {
-  const location = useLocation(); // ✅ เพิ่มนี้
+  const location = useLocation();
+  const authContext = useContext(AuthContext);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  if (!authContext) return null;
+  const { user } = authContext;
+
+  // ✅ เช็คว่าทรัพย์สินนี้อยู่ใน favorites หรือไม่
+  useEffect(() => {
+  const checkFavorite = async () => {
+    if (!user?.token || !property._id) {
+      setIsFavorite(false); 
+      return;
+    }
+
+    try {
+      const response = await axios.get(
+        `http://localhost:4000/api/user/favorite/check/${property._id}`,
+        { headers: { Authorization: `Bearer ${user.token}` } }
+      );
+
+      if (response.data.success) {
+        setIsFavorite(response.data.isFavorite);
+      }
+    } catch (error) {
+      console.error('Error checking favorite:', error);
+      setIsFavorite(false); 
+    }
+  };
+
+  checkFavorite();
+}, [user, property._id]);
+
+  // ✅ Toggle favorite (เพิ่ม/ลบ)
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault(); 
+    e.stopPropagation(); 
+
+    if (!user) {
+      toast.error('กรุณาเข้าสู่ระบบก่อน');
+      return;
+    }
+
+    if (!property._id) return;
+
+    try {
+      setIsLoading(true);
+
+      if (isFavorite) {
+        // ลบออกจาก favorites
+        const response = await axios.delete(
+          'http://localhost:4000/api/user/favorite/remove',
+          {
+            data: { propertyId: property._id },
+            headers: { Authorization: `Bearer ${user.token}` }
+          }
+        );
+
+        if (response.data.success) {
+          setIsFavorite(false);
+          toast.success('ลบออกจากรายการโปรดแล้ว');
+        }
+      } else {
+        // เพิ่มเข้า favorites
+        const response = await axios.post(
+          'http://localhost:4000/api/user/favorite/add',
+          { propertyId: property._id },
+          { headers: { Authorization: `Bearer ${user.token}` } }
+        );
+
+        if (response.data.success) {
+          setIsFavorite(true);
+          toast.success('เพิ่มเข้าร้ายการโปรดแล้ว');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      toast.error(error.response?.data?.message || 'เกิดข้อผิดพลาด');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!property) return null;
 
@@ -37,9 +122,25 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
 
-        {/* ปุ่มหัวใจ */}
-        <button className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-all duration-200 shadow-lg group/heart">
-          <Heart className="w-4 h-4 text-gray-600 group-hover/heart:text-[#b76e79] group-hover/heart:fill-[#b76e79] transition-all duration-200" />
+        {/* ✅ ปุ่มหัวใจ - เปลี่ยนสีตามสถานะ */}
+        <button 
+          onClick={handleToggleFavorite}
+          disabled={isLoading}
+          className={`absolute top-3 right-3 w-9 h-9 rounded-full backdrop-blur-sm flex items-center justify-center transition-all duration-200 shadow-lg group/heart ${
+            isLoading ? 'opacity-50 cursor-not-allowed' : ''
+          } ${
+            isFavorite 
+              ? 'bg-red-500 hover:bg-red-600' 
+              : 'bg-white/90 hover:bg-white'
+          }`}
+        >
+          <Heart 
+            className={`w-4 h-4 transition-all duration-200 ${
+              isFavorite 
+                ? 'text-white fill-white' 
+                : 'text-gray-600 group-hover/heart:text-[#b76e79] group-hover/heart:fill-[#b76e79]'
+            }`}
+          />
         </button>
 
         {/* Rating */}
@@ -92,7 +193,7 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
 
           <Link 
             to={`/property/${property._id}`}
-            state={{ from: location.pathname }} // ✅ ส่ง state ไปด้วย
+            state={{ from: location.pathname }}
             className="px-4 py-2 rounded-lg bg-gradient-to-r 
               from-[#6f4e37] to-[#a47551]
               hover:from-[#5d3f2c] hover:to-[#8d623f]
@@ -110,22 +211,13 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
 const PropertyCardList = () => {
   const context = useContext(SearchContext);
 
-  console.log('🎨 PropertyCardList rendering...');
-  console.log('🎨 Context:', context);
-
   if (!context) {
-    console.log('❌ No context found!');
     return null;
   }
   
   const { properties, loading } = context;
-  
-  console.log('📊 PropertyCardList - Properties:', properties);
-  console.log('📊 PropertyCardList - Count:', properties.length);
-  console.log('📊 PropertyCardList - Loading:', loading);
 
   if (loading) {
-    console.log('⏳ Showing loading state');
     return (
       <div className="w-full flex justify-center items-center py-20">
         <div className="w-12 h-12 border-4 border-gray-300 border-t-[#7b5e57] rounded-full animate-spin"></div>
@@ -134,7 +226,6 @@ const PropertyCardList = () => {
   }
 
   if (!loading && properties.length === 0) {
-    console.log('⚠️ No properties to display');
     return (
       <p className="text-center text-gray-600 mt-10">
         ไม่มีผลลัพธ์
@@ -142,11 +233,9 @@ const PropertyCardList = () => {
     );
   }
 
-  console.log('✅ Rendering', properties.length, 'property cards');
   return (
     <div className="grid grid-cols-4 gap-6">
-      {properties.map((property, index) => {
-        console.log(`🏠 Rendering card ${index + 1}:`, property.title);
+      {properties.map((property) => {
         return <PropertyCard key={property._id} property={property} />;
       })}
     </div>

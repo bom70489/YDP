@@ -44,7 +44,6 @@ const Boxsearch = () => {
   const { search, clear } = useContext(SearchContext) || {}
   const hasUserInteracted = useRef(false);
 
-  // ✅ บันทึก filters ลง sessionStorage ทุกครั้งที่เปลี่ยน
   useEffect(() => {
     const filters = {
       propertyType,
@@ -118,6 +117,7 @@ const Boxsearch = () => {
         break;
       case "100+ ตรม":
         min_area = 100;
+        max_area = 999999999;
         q += "ขนาดใหญ่พิเศษ ";
         break;
     }
@@ -218,12 +218,11 @@ const Boxsearch = () => {
                 className="w-full px-4 py-3 rounded-xl bg-[#f3ece7] border-2 border-[#d7c5b8] text-[#7a4f35] hover:border-[#c8b8b1] focus:border-[#b58363] transition-all duration-200 focus:bg-white appearance-none cursor-pointer"
               >
                 <option value="">เลือกขนาด</option>
-                <option value="30-50 ตรม">30 - 50 ตรม</option>
-                <option value="50-100 ตรม">50 - 100 ตรม</option>
-                <option value="100+ ตรม">100+ ตรม</option>
+                <option value="30 - 50 ตรม">30 - 50 ตรม</option>  
+                <option value="50 - 100 ตรม">50 - 100 ตรม</option>  
+                <option value="100+ ตรม">100+ ตรม</option> 
               </select>
             </div>
-
           </div>
         </div>
       </div>

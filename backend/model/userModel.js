@@ -9,8 +9,14 @@ const userSchema = new mongoose.Schema({
       query: { type: String, required: true }, 
       timestamp: { type: Date, default: Date.now }, 
     }
-   ]
-})
+   ],
+   favorites: [
+    {
+      propertyId: { type: String, required: true }, 
+      addedAt: { type: Date, default: Date.now }, 
+    }
+  ]
+} , { timestamps: true })
 
 const userModel = mongoose.models.user || mongoose.model('user' , userSchema)
 

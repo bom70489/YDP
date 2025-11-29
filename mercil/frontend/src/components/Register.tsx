@@ -20,7 +20,7 @@ const Register = () => {
     try {
       await register(name , email, password);
       toast.success("Login success!");
-      navigate("/tester"); 
+      navigate("/"); 
     } catch (err: any) {
       toast.error(err.message);
     }
