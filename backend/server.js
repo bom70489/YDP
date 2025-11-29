@@ -12,10 +12,12 @@ connectDb()
 
 app.get("/ai/search", async (req, res) => {
   try {
-    const { q , min_price , max_price} = req.query;
+    const { q , min_price , max_price , min_area, max_area} = req.query;
+
+    console.log("Received:", { q, min_price, max_price , min_area , max_area});
 
     const response = await axios.get("http://127.0.0.1:8000/hybrid_search", {
-      params: { query: q , min_price , max_price}
+      params: { query: q , min_price , max_price , min_area, max_area}
     });
 
     res.json(response.data.results);

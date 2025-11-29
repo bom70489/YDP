@@ -1,59 +1,137 @@
-import { useContext, useState, useEffect } from 'react'
+import { useContext, useState, useEffect, useRef } from 'react'
 import { Home, MapPin, DollarSign, Layers } from 'lucide-react';
 import { SearchContext } from '../context/AppContext';
 
+const FILTERS_STORAGE_KEY = 'search_filters';
+
 const Boxsearch = () => {
-  const [propertyType, setPropertyType] = useState('');
-  const [location, setLocation] = useState('');
-  const [priceRange, setPriceRange] = useState('');
-  const [area, setArea] = useState('');
+  const [propertyType, setPropertyType] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return saved ? JSON.parse(saved).propertyType || '' : '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [location, setLocation] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return saved ? JSON.parse(saved).location || '' : '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [priceRange, setPriceRange] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return saved ? JSON.parse(saved).priceRange || '' : '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [area, setArea] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return saved ? JSON.parse(saved).area || '' : '';
+    } catch {
+      return '';
+    }
+  });
+
   const { search, clear } = useContext(SearchContext) || {}
+  const hasUserInteracted = useRef(false);
+
+  // ✅ บันทึก filters ลง sessionStorage ทุกครั้งที่เปลี่ยน
+  useEffect(() => {
+    const filters = {
+      propertyType,
+      location,
+      priceRange,
+      area
+    };
+    sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [propertyType, location, priceRange, area]);
 
   useEffect(() => {
     if (!search) return;
 
-    if (!propertyType && !priceRange && !location && !area) {
+    const hasAnyValue = propertyType || priceRange || location || area;
+    
+    if (!hasUserInteracted.current && !hasAnyValue) {
+      return;
+    }
+
+    if (hasAnyValue) {
+      hasUserInteracted.current = true;
+    }
+
+    if (!hasAnyValue && hasUserInteracted.current) {
       clear?.()
       return;
     }
 
+    // สร้าง query
     let q = "";
     let min_price: number | null = null;
     let max_price: number | null = null;
+    let min_area: number | null = null;
+    let max_area: number | null = null;
 
     if (propertyType) q += propertyType + " ";
     if (location) q += location + " ";
 
     switch(priceRange) {
       case "< 1 ล้าน":
+        min_price = 0;
         max_price = 1000000;
-        q += "ไม่เกิน 1 ล้าน ";
         break;
       case "1-3 ล้าน":
         min_price = 1000000;
         max_price = 3000000;
-        q += "1-3 ล้าน ";
         break;
       case "3-5 ล้าน":
         min_price = 3000000;
         max_price = 5000000;
-        q += "3-5 ล้าน ";
         break;
       case "5-10 ล้าน":
         min_price = 5000000;
         max_price = 10000000;
-        q += "5-10 ล้าน ";
         break;
       case "> 10 ล้าน":
         min_price = 10000000;
-        q += "มากกว่า 10 ล้าน ";
         break;
     }
 
-    console.log({ q, min_price, max_price });
+    switch(area) {
+      case "30 - 50 ตรม":
+        min_area = 30;
+        max_area = 50;
+        q += "ขนาดกลาง ";
+        break;
+      case "50 - 100 ตรม":
+        min_area = 50;
+        max_area = 100;
+        q += "ขนาดใหญ่ ";
+        break;
+      case "100+ ตรม":
+        min_area = 100;
+        q += "ขนาดใหญ่พิเศษ ";
+        break;
+    }
 
-    search(q.trim(), { min_price, max_price });
-  }, [propertyType, priceRange, location , area]); 
+    const finalQuery = q.trim() || "ทรัพย์สินทั้งหมด";
+
+    const filters: any = {};
+    if (min_price !== null) filters.min_price = min_price;
+    if (max_price !== null) filters.max_price = max_price;
+    if (min_area !== null) filters.min_area = min_area;
+    if (max_area !== null) filters.max_area = max_area;
+
+    search(finalQuery, filters);
+  }, [propertyType, priceRange, location, area]); 
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -79,7 +157,9 @@ const Boxsearch = () => {
                   value={propertyType}
                   onChange={(e) => {
                     setPropertyType(e.target.value);
-                    setLocation(''); setPriceRange(''); setArea('');
+                    setLocation(''); 
+                    setPriceRange(''); 
+                    setArea('');
                   }}
                   className="w-full px-4 py-3 rounded-xl bg-[#f3ece7] border-2 border-[#d7c5b8] text-[#7a4f35] cursor-pointer outline-none transition-all duration-200 hover:border-[#c8b8b1] focus:border-[#b58363] focus:bg-white appearance-none"
                 >

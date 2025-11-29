@@ -1,7 +1,7 @@
-import { useNavigate, useParams } from "react-router-dom";
-import { useContext } from 'react'
+import { useNavigate, useParams , useLocation} from "react-router-dom";
+import { useContext , useState , useEffect} from 'react'
 import { SearchContext } from "../context/AppContext";
-
+import axios from "axios";
 import {
   CircleArrowLeft,
   Heart,
@@ -23,23 +23,92 @@ const ShowDetail = () => {
   const { id } = useParams();
   const context = useContext(SearchContext);
   const navigate = useNavigate();
-  console.log("ID" , id);
-  if (!context) return null;
-  const { properties } = context;
+  const location = useLocation();
+  const [property, setProperty] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const property = properties.find(
-  (item) => item._id === id || item._id?.toString() === id
-  );
+  console.log('📄 ShowDetail rendering for ID:', id);
+  console.log('📄 Location state:', location.state);
+  console.log('📄 Context properties count:', context?.properties.length);
 
-  if (!property) {
-    console.error("ไม่พบข้อมูลทรัพย์สินสำหรับ ID:", id); 
+  useEffect(() => {
+    console.log('🔄 ShowDetail useEffect triggered');
+    
+    if (!id) {
+      console.log('❌ No ID provided');
+      setLoading(false);
+      setError(true);
+      return;
+    }
+
+    setLoading(true);
+    setError(false);
+
+    let propFromContext;
+    if (context?.properties) {
+      console.log('🔍 Searching in context for ID:', id);
+      console.log('🔍 Available IDs:', context.properties.map(p => p._id));
+      propFromContext = context.properties.find(p => p._id === id);
+    }
+
+    if (propFromContext) {
+      console.log('✅ Found property in context:', propFromContext.title);
+      setProperty(propFromContext);
+      setLoading(false);
+    } else {
+      console.log('⚠️ Property not in context, fetching from API...');
+      
+      const fetchProperty = async () => {
+        try {
+          console.log('📡 Fetching from API:', `http://localhost:8000/property/${id}`);
+          const res = await axios.get(`http://localhost:8000/property/${id}`);
+          console.log('✅ API Response:', res.data);
+          setProperty(res.data);
+          setError(false);
+        } catch (err) {
+          console.error('❌ Fetch error:', err);
+          if (axios.isAxiosError(err)) {
+            console.error("Error response:", err.response?.data);
+            console.error("Error status:", err.response?.status);
+          }
+          setProperty(null);
+          setError(true);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchProperty();
+    }
+  }, [id, context?.properties]);
+
+  const handleBack = () => {
+    const fromPath = (location.state as any)?.from || '/tester';
+    console.log('⬅️ Navigating back to:', fromPath);
+    navigate(fromPath, { replace: false });
+  };
+
+  
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-amber-50">
+        <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-800 rounded-full animate-spin mb-4"></div>
+        <p className="text-stone-600 text-lg">กำลังโหลดข้อมูล...</p>
+      </div>
+    );
+  }
+
+  // ✅ แสดง Error เมื่อไม่พบข้อมูล
+  if (error || !property) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-amber-50">
         <h1 className="text-3xl font-bold text-amber-800 mb-4">ไม่พบข้อมูล</h1>
-        <p className="text-stone-600">กรุณาตรวจสอบลิงก์หรือกลับไปยังหน้าหลัก</p>
+        <p className="text-stone-600 mb-2">ไม่พบทรัพย์สินที่มี ID: <code className="bg-stone-200 px-2 py-1 rounded">{id}</code></p>
+        <p className="text-stone-500 text-sm mb-6">กรุณาตรวจสอบลิงก์หรือกลับไปยังหน้าหลัก</p>
         <button 
-          onClick={() => navigate('/')} 
-          className="mt-6 px-4 py-2 bg-amber-700 text-white rounded-lg hover:bg-amber-800 transition duration-150 shadow-md"
+          onClick={() => navigate('/tester')} 
+          className="px-6 py-3 bg-amber-700 text-white rounded-lg hover:bg-amber-800 transition duration-150 shadow-md"
         >
           กลับหน้าหลัก
         </button>
@@ -52,7 +121,7 @@ const ShowDetail = () => {
       
       <div className="pt-8 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <button 
-          onClick={() => navigate(-1)} 
+          onClick={handleBack} 
           className="p-2 rounded-full text-stone-700 hover:bg-amber-100 transition duration-150"
           aria-label="Back"
         >
