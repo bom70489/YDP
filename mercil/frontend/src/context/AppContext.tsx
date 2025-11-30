@@ -69,9 +69,9 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
           max_area: filters.max_area,
         }
       });
-
+        
       const mapped = res.data.map((item: any) => {
-        let coordinates = undefined;
+        let coordinates: { lat: number; lng: number } | undefined = undefined;
         
         if (item.coordinates) {
           coordinates = {
@@ -80,6 +80,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
           };
         } else if (item.location_geo) {
           const geo = item.location_geo;
+          
           if (geo.coordinates && Array.isArray(geo.coordinates) && geo.coordinates.length === 2) {
             coordinates = {
               lng: geo.coordinates[0],
@@ -93,11 +94,11 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        const mapped = {
+        const property: Property = {
           _id: (item._id?._id || item._id?.$oid || item._id || item.id)?.toString(),
           title: item.name_th,
           location: item.location_village_th || "ไม่มีที่อยู่",
-          price: Number(item.price),
+          price: Number(item.price).toString(),
           bedrooms: item.asset_details_number_of_bedrooms || 0,
           bathrooms: item.asset_details_number_of_bathrooms || 0,
           area: item.asset_details_land_size || 0,
@@ -109,9 +110,9 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
 
         // เพิ่ม coordinates เฉพาะเมื่อมีค่าที่ถูกต้อง
         if (coordinates && coordinates.lat !== 0 && coordinates.lng !== 0) {
-          mapped.coordinates = coordinates;
+          property.coordinates = coordinates;
         }
-        return mapped;
+        return property;
       });
 
       setProperties(mapped);
