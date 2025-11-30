@@ -358,6 +358,7 @@ async def hybrid_search(
                 "asset_details_land_size": 1,
                 "asset_type_id": 1,
                 "location_village_th": 1,
+                "location_geo": 1,  
             }}
         ])
         
@@ -493,6 +494,29 @@ async def hybrid_search(
         doc["image"] = doc.get("image", "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D")
         doc["price"] = doc.get("asset_details_selling_price", 0)
 
+
+        if "location_geo" in doc and doc["location_geo"]:
+            geo = doc["location_geo"]
+            
+            # รองรับทั้ง GeoJSON object และ array
+            if isinstance(geo, dict) and "coordinates" in geo:
+                coords = geo["coordinates"]
+            elif isinstance(geo, list):
+                coords = geo
+            else:
+                coords = []
+            
+            if len(coords) == 2:
+                doc["coordinates"] = {
+                    "lng": coords[0],
+                    "lat": coords[1]
+                }
+                print(f"✅ Added coordinates for {doc.get('name_th', 'N/A')}: {coords}")
+            else:
+                print(f"⚠️ Invalid coordinates for {doc.get('name_th', 'N/A')}: {coords}")
+        else:
+            print(f"❌ No location_geo for {doc.get('name_th', 'N/A')}")
+            
     results_sorted = sorted(candidates, key=lambda d: d["_rerank_score"], reverse=True)
     final_results = results_sorted[:top_k]
     

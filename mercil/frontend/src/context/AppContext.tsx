@@ -1,4 +1,4 @@
-import { createContext, useState , type ReactNode } from 'react';
+import { createContext, useState, type ReactNode } from 'react';
 import axios from 'axios';
 
 interface Property {
@@ -13,6 +13,7 @@ interface Property {
   type: string;
   description?: string;
   image?: string;
+  coordinates?: { lat: number; lng: number };
 }
 
 interface SearchFilters {
@@ -50,6 +51,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const [loading, setLoading] = useState(false);
+  
   const clear = () => {
     setProperties([]);
     sessionStorage.removeItem(STORAGE_KEY);
@@ -68,25 +70,52 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         }
       });
 
+      const mapped = res.data.map((item: any) => {
+        let coordinates = undefined;
+        
+        if (item.coordinates) {
+          coordinates = {
+            lat: item.coordinates.lat,
+            lng: item.coordinates.lng
+          };
+        } else if (item.location_geo) {
+          const geo = item.location_geo;
+          if (geo.coordinates && Array.isArray(geo.coordinates) && geo.coordinates.length === 2) {
+            coordinates = {
+              lng: geo.coordinates[0],
+              lat: geo.coordinates[1]
+            };
+          } else if (Array.isArray(geo) && geo.length === 2) {
+            coordinates = {
+              lng: geo[0],
+              lat: geo[1]
+            };
+          }
+        }
 
-      const mapped = res.data.map((item: any) => ({
-        _id: (item._id?._id || item._id?.$oid || item._id || item.id)?.toString(),
-        title: item.name_th,
-        location: item.location_village_th || "ไม่มีที่อยู่",
-        price: Number(item.price),
-        bedrooms: item.asset_details_number_of_bedrooms || 0,
-        bathrooms: item.asset_details_number_of_bathrooms || 0,
-        area: item.asset_details_land_size || 0,
-        rating: item.scores || 5,
-        description: item.ai_description_th || "-",
-        type: item.type || "ขาย",
-        image: item.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-        coordinates: item.coordinates ?? { lat: 0, lng: 0 }
-      }));
+        const mapped = {
+          _id: (item._id?._id || item._id?.$oid || item._id || item.id)?.toString(),
+          title: item.name_th,
+          location: item.location_village_th || "ไม่มีที่อยู่",
+          price: Number(item.price),
+          bedrooms: item.asset_details_number_of_bedrooms || 0,
+          bathrooms: item.asset_details_number_of_bathrooms || 0,
+          area: item.asset_details_land_size || 0,
+          rating: item.scores || 5,
+          description: item.ai_description_th || "-",
+          type: item.type || "ขาย",
+          image: item.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+        };
+
+        // เพิ่ม coordinates เฉพาะเมื่อมีค่าที่ถูกต้อง
+        if (coordinates && coordinates.lat !== 0 && coordinates.lng !== 0) {
+          mapped.coordinates = coordinates;
+        }
+        return mapped;
+      });
 
       setProperties(mapped);
       
-
       const token = localStorage.getItem("token");
 
       if (token) {
@@ -98,10 +127,8 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         );
-
       } else {
         await axios.post("http://localhost:4000/api/user/guestSearch", { query });
-
       }
 
     } catch (err) {

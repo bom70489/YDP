@@ -49,7 +49,6 @@ const ShowDetail = () => {
   const location = useLocation();
   const [property, setProperty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState(false);
   
   const [isFavorite, setIsFavorite] = useState(false);
@@ -83,8 +82,8 @@ const ShowDetail = () => {
           setError(false);
         } catch (err) {
           if (axios.isAxiosError(err)) {
-            console.error("Error response:", err.response?.data);
-            console.error("Error status:", err.response?.status);
+            console.error("❌ Error response:", err.response?.data);
+            console.error("❌ Error status:", err.response?.status);
           }
           setProperty(null);
           setError(true);
@@ -159,7 +158,6 @@ const ShowDetail = () => {
         }
       }
     } catch (error: any) {
-      console.error('Error toggling favorite:', error);
       toast.error(error.response?.data?.message || 'เกิดข้อผิดพลาด');
     } finally {
       setFavoriteLoading(false);
@@ -196,8 +194,6 @@ const ShowDetail = () => {
     );
   }
 
-  console.log(property);
-  
   return (
     <div className={`min-h-screen ${BG_COLOR} font-sans`}>
       <div className="pt-8 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -330,53 +326,46 @@ const ShowDetail = () => {
                 ที่ตั้ง
               </h3>
               
-              {property.coordinates ? (
+              {property.coordinates && property.coordinates.lat && property.coordinates.lng ? (
                 <div className="space-y-3">
-                  {/* Leaflet Map */}
-                  <div className="relative w-full h-[400px]">
-                      {/* Loading overlay */}
-                      {!mapReady && (
-                        <div className="absolute inset-0 bg-stone-200 flex items-center justify-center z-10">
-                          <div className="animate-spin w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full"></div>
-                        </div>
-                      )}
+                  {/* Leaflet Map - ใช้ key เพื่อ force re-render เมื่อ coordinates เปลี่ยน */}
+                  <div className="relative w-full h-[400px] rounded-lg overflow-hidden">
+                    <MapContainer
+                      key={`${property.coordinates.lat}-${property.coordinates.lng}`}
+                      center={[property.coordinates.lat, property.coordinates.lng]}
+                      zoom={15}
+                      style={{ height: '100%', width: '100%' }}
+                      scrollWheelZoom={true}
+                    >
+                      <TileLayer
+                        attribution='&copy; OpenStreetMap contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
 
-                      <MapContainer
-                        center={[property.coordinates.lat, property.coordinates.lng]}
-                        zoom={15}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={true}
-                        whenReady={() => setMapReady(true)}
+                      <Marker 
+                        position={[property.coordinates.lat, property.coordinates.lng]}
+                        icon={customIcon}
                       >
-                        <TileLayer
-                          attribution='&copy; OpenStreetMap contributors'
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
+                        <Popup>
+                          <div className="text-center">
+                            <strong>{property.title}</strong><br/>
+                            {property.location}
+                          </div>
+                        </Popup>
+                      </Marker>
 
-                        <Marker 
-                          position={[property.coordinates.lat, property.coordinates.lng]}
-                          icon={customIcon}
-                        >
-                          <Popup>
-                            <div className="text-center">
-                              <strong>{property.title}</strong><br/>
-                              {property.location}
-                            </div>
-                          </Popup>
-                        </Marker>
-
-                        <Circle
-                          center={[property.coordinates.lat, property.coordinates.lng]}
-                          radius={500}
-                          pathOptions={{
-                            color: '#be8368',
-                            fillColor: '#be8368',
-                            fillOpacity: 0.15,
-                            weight: 2
-                          }}
-                        />
-                      </MapContainer>
-                    </div>
+                      <Circle
+                        center={[property.coordinates.lat, property.coordinates.lng]}
+                        radius={500}
+                        pathOptions={{
+                          color: '#be8368',
+                          fillColor: '#be8368',
+                          fillOpacity: 0.15,
+                          weight: 2
+                        }}
+                      />
+                    </MapContainer>
+                  </div>
                   
                   {/* Location Info */}
                   <div className="bg-amber-50 p-4 rounded-lg">
