@@ -26,24 +26,53 @@ const Login = () => {
   };
 
   return (
-    <div  className="flex justify-center items-center h-screen">
-        <form onSubmit={handleSubmit}  className="border py-3 w-[600px] px-6 rounded-3xl">
-            <h1 className="text-2xl mb-3 text-blue-400">Login Page</h1>
-            <div className="flex flex-col mb-3">
-                <label htmlFor="name" className="mb-1 text-start">Email:</label>
-                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}  placeholder="Enter your email" className="border py-1 px-2 w-full"/>
-            </div>
-            <div className="flex flex-col mb-4">
-                <label htmlFor="password" className="mb-1 text-start">Password:</label>
-                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}  placeholder="Enter your password" className="border py-1 px-2 w-full"/>
-            </div>
-            <button type="submit" className="w-full mb-1 text-white bg-black duration-300 cursor-pointer hover:bg-green-400 hover:text-black py-2">Submit</button>
-            {/* if not hace account */}
-            <div className="flex">
-                <p className="mr-3">If you don't have account.</p>
-                <Link to={'/register'} className="text-blue-500 underline">Register</Link>
-            </div>
-        </form>
+    <div className="flex justify-center items-center h-screen bg-[#F5EDE0]">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white shadow-xl border border-[#C8B8A5] py-8 w-[450px] px-8 rounded-2xl"
+      >
+        <h1 className="text-3xl font-semibold mb-6 text-center text-[#7B5E57]">
+          Login
+        </h1>
+
+        <div className="flex flex-col mb-4">
+          <label className="mb-1 text-[#5A463F] font-medium">Email:</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            className="border border-[#C8B8A5] py-2 px-3 rounded-lg focus:ring-2 focus:ring-[#A3887B] outline-none"
+          />
+        </div>
+
+        <div className="flex flex-col mb-6">
+          <label className="mb-1 text-[#5A463F] font-medium">Password:</label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password"
+            className="border border-[#C8B8A5] py-2 px-3 rounded-lg focus:ring-2 focus:ring-[#A3887B] outline-none"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="w-full mb-3 text-white bg-[#7B5E57] hover:bg-[#A07D72] duration-300 py-2 rounded-lg font-semibold"
+        >
+          Login
+        </button>
+
+        <div className="flex justify-center mt-2 text-sm">
+          <p className="mr-2 text-[#5A463F]">Don't have an account?</p>
+          <Link to="/register" className="text-[#7B5E57] underline font-medium">
+            Register
+          </Link>
+        </div>
+      </form>
     </div>
   )
 }

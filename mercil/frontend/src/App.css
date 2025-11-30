@@ -1,8 +1,49 @@
+/* Leaflet CSS */
+@import 'leaflet/dist/leaflet.css';
+
 #root {
   max-width: 100%;
   margin: 0 ;
   padding: 0;
   text-align: center;
+}
+
+
+/* Fix Leaflet z-index issues */
+.leaflet-container {
+  z-index: 0;
+}
+
+.leaflet-pane {
+  z-index: 400;
+}
+
+.leaflet-tile-pane {
+  z-index: 200;
+}
+
+.leaflet-overlay-pane {
+  z-index: 400;
+}
+
+.leaflet-shadow-pane {
+  z-index: 500;
+}
+
+.leaflet-marker-pane {
+  z-index: 600;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 650;
+}
+
+.leaflet-popup-pane {
+  z-index: 700;
+}
+
+.leaflet-control {
+  z-index: 800;
 }
 
 .logo {

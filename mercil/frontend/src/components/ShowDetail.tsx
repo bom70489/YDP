@@ -1,9 +1,12 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useContext, useState, useEffect } from 'react'
 import { SearchContext } from "../context/AppContext";
-import { AuthContext } from "../context/UserContext"; // ✅ เพิ่ม
+import { AuthContext } from "../context/UserContext";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import axios from "axios";
-import { toast } from 'react-toastify'; // ✅ เพิ่ม
+import { toast } from 'react-toastify';
 import {
   CircleArrowLeft,
   Heart,
@@ -14,25 +17,45 @@ import {
   Archive,
   Share2,
   BookOpen,
+  MapPin,
 } from "lucide-react";
 
+// Fix Leaflet icon issue
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
 const BG_COLOR = " bg-stone-50";
+
+// Custom marker icon
+const customIcon = new L.Icon({
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
 const ShowDetail = () => {
   const { id } = useParams();
   const context = useContext(SearchContext);
-  const authContext = useContext(AuthContext); // ✅ เพิ่ม
+  const authContext = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
   const [property, setProperty] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState(false);
   
-  // ✅ เพิ่ม state สำหรับ favorite
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
 
-  const user = authContext?.user; // ✅ ดึง user
+  const user = authContext?.user;
 
   useEffect(() => {
     if (!id) {
@@ -55,7 +78,6 @@ const ShowDetail = () => {
     } else {
       const fetchProperty = async () => {
         try {
-          console.log('📡 Fetching from API:', `http://localhost:8000/property/${id}`);
           const res = await axios.get(`http://127.0.0.1:8000/property/${id}`);
           setProperty(res.data);
           setError(false);
@@ -75,7 +97,6 @@ const ShowDetail = () => {
     }
   }, [id, context?.properties]);
 
-  // ✅ เช็คว่าอยู่ใน favorites หรือไม่
   useEffect(() => {
     const checkFavorite = async () => {
       if (!user?.token || !id) {
@@ -101,7 +122,6 @@ const ShowDetail = () => {
     checkFavorite();
   }, [user, id]);
 
-  // ✅ Toggle favorite
   const handleToggleFavorite = async () => {
     if (!user) {
       toast.error('กรุณาเข้าสู่ระบบก่อน');
@@ -114,7 +134,6 @@ const ShowDetail = () => {
       setFavoriteLoading(true);
 
       if (isFavorite) {
-        // ลบออกจาก favorites
         const response = await axios.delete(
           'http://localhost:4000/api/user/favorite/remove',
           {
@@ -128,7 +147,6 @@ const ShowDetail = () => {
           toast.success('ลบออกจากรายการโปรดแล้ว');
         }
       } else {
-        // เพิ่มเข้า favorites
         const response = await axios.post(
           'http://localhost:4000/api/user/favorite/add',
           { propertyId: id },
@@ -178,6 +196,8 @@ const ShowDetail = () => {
     );
   }
 
+  console.log(property);
+  
   return (
     <div className={`min-h-screen ${BG_COLOR} font-sans`}>
       <div className="pt-8 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -196,32 +216,35 @@ const ShowDetail = () => {
           <div className="mb-6 lg:mb-0">
             <div className="relative overflow-hidden rounded-lg shadow-md mb-4">
               <img
-                className="w-full h-auto object-cover transition-all duration-300"
-                src="https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+                className="w-full h-96 object-cover transition-all duration-300"
+                src={property.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170"}
                 alt={property.title}
                 onError={(e) => {
                   (e.target as HTMLImageElement).onerror = null;
-                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D";
+                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170";
                 }}
               />
-              <div className="absolute top-0 left-0 right-0 p-4 text-center text-xl font-bold bg-amber-900/10 text-stone-100">
-              </div>
             </div>
 
             <div className="hidden lg:flex gap-2">
               {[1, 2, 3, 4].map(i => (
-                <img key={i} src={`https://placehold.co/100x70/bdae9c/3f3f46?text=picture+${i}`} className="rounded-md hover:shadow-md cursor-pointer transition" alt={`Thumbnail ${i}`} />
+                <img 
+                  key={i} 
+                  src={`https://placehold.co/100x70/bdae9c/3f3f46?text=picture+${i}`} 
+                  className="rounded-md hover:shadow-md cursor-pointer transition" 
+                  alt={`Thumbnail ${i}`} 
+                />
               ))}
             </div>
           </div>
 
+          {/* คอลัมน์ 2: รายละเอียด */}
           <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg">
-            <div className="flex flex-col pb-4 mb-6">
+            <div className="flex flex-col pb-4 mb-6 border-b">
               <div className="flex justify-between items-start mb-2">
                 <h2 className="text-2xl font-semibold text-stone-700">
                   {property.title}
                 </h2>
-                {/* ✅ ปุ่มหัวใจที่ทำงานได้ */}
                 <button
                   onClick={handleToggleFavorite}
                   disabled={favoriteLoading}
@@ -238,9 +261,12 @@ const ShowDetail = () => {
               </div>
 
               <h1 className="text-4xl sm:text-5xl font-bold text-amber-800 mb-2">
-                $ {Number(property.price)?.toLocaleString()}
+                ฿ {Number(property.price)?.toLocaleString()}
               </h1>
-              <p className="text-sm text-stone-500">{property.location}</p>
+              <div className="flex items-center text-sm text-stone-500">
+                <MapPin className="w-4 h-4 mr-1" />
+                {property.location}
+              </div>
             </div>
 
             <div className="flex gap-4 mb-8">
@@ -262,46 +288,122 @@ const ShowDetail = () => {
             <h2 className="text-2xl font-bold text-stone-700 pb-2 mb-4">
               รายละเอียด
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-3 mb-6">
               <div className="flex items-center">
                 <Bed className="mr-3 w-5 h-5 text-amber-600" />
-                <p className="text-stone-700 text-lg">ห้องนอน: <span className="font-semibold">{property.bedrooms}</span></p>
+                <p className="text-stone-700">ห้องนอน: <span className="font-semibold">{property.bedrooms}</span></p>
               </div>
 
               <div className="flex items-center">
                 <Bath className="mr-3 w-5 h-5 text-amber-600" />
-                <p className="text-stone-700 text-lg">ห้องน้ำ: <span className="font-semibold">{property.bathrooms}</span></p>
+                <p className="text-stone-700">ห้องน้ำ: <span className="font-semibold">{property.bathrooms}</span></p>
               </div>
 
               <div className="flex items-center">
                 <LandPlot className="mr-3 w-5 h-5 text-amber-600" />
-                <p className="text-stone-700 text-lg">พื้นที่: <span className="font-semibold">{property.area}</span></p>
+                <p className="text-stone-700">พื้นที่: <span className="font-semibold">{property.area} ตร.ม.</span></p>
               </div>
 
               <div className="flex items-center">
                 <Star className="mr-3 w-5 h-5 text-yellow-500 fill-yellow-500" />
-                <p className="text-stone-700 text-lg">คะแนน: <span className="font-semibold">{property.rating}</span></p>
+                <p className="text-stone-700">คะแนน: <span className="font-semibold">{property.rating}</span></p>
               </div>
 
               <div className="flex items-center">
                 <Archive className="mr-3 w-5 h-5 text-amber-600" />
-                <p className="text-stone-700 text-lg">สถานะ: <span className="font-semibold">{property.type}</span></p>
+                <p className="text-stone-700">สถานะ: <span className="font-semibold">{property.type}</span></p>
               </div>
             </div>
 
             {/* คำอธิบายเพิ่มเติม */}
-            <div className="pt-6 mt-6">
-              <h3 className="text-2xl font-bold text-stone-700 mb-4">คำอธิบายเพิ่มเติม</h3>
-              <p className="text-gray-600 text-base leading-relaxed">
+            <div className="pt-6 mt-6 border-t">
+              <h3 className="text-xl font-bold text-stone-700 mb-3">คำอธิบายเพิ่มเติม</h3>
+              <p className="text-gray-600 leading-relaxed">
                 {property.description}
               </p>
             </div>
 
-            <div className="pt-6 mt-6">
-              <h3 className="text-2xl font-bold text-stone-700 mb-4">Google Map</h3>
-              <div className="w-full h-64 rounded-lg bg-[#C99A85] flex items-center justify-center text-stone-700 font-semibold shadow-inner">
-                [ Placeholder for map ]
-              </div>
+            {/* Google Map with Leaflet */}
+            <div className="pt-6 mt-6 border-t">
+              <h3 className="text-xl font-bold text-stone-700 mb-4 flex items-center">
+                <MapPin className="w-5 h-5 mr-2 text-amber-600" />
+                ที่ตั้ง
+              </h3>
+              
+              {property.coordinates ? (
+                <div className="space-y-3">
+                  {/* Leaflet Map */}
+                  <div className="relative w-full h-[400px]">
+                      {/* Loading overlay */}
+                      {!mapReady && (
+                        <div className="absolute inset-0 bg-stone-200 flex items-center justify-center z-10">
+                          <div className="animate-spin w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full"></div>
+                        </div>
+                      )}
+
+                      <MapContainer
+                        center={[property.coordinates.lat, property.coordinates.lng]}
+                        zoom={15}
+                        style={{ height: '100%', width: '100%' }}
+                        scrollWheelZoom={true}
+                        whenReady={() => setMapReady(true)}
+                      >
+                        <TileLayer
+                          attribution='&copy; OpenStreetMap contributors'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+
+                        <Marker 
+                          position={[property.coordinates.lat, property.coordinates.lng]}
+                          icon={customIcon}
+                        >
+                          <Popup>
+                            <div className="text-center">
+                              <strong>{property.title}</strong><br/>
+                              {property.location}
+                            </div>
+                          </Popup>
+                        </Marker>
+
+                        <Circle
+                          center={[property.coordinates.lat, property.coordinates.lng]}
+                          radius={500}
+                          pathOptions={{
+                            color: '#be8368',
+                            fillColor: '#be8368',
+                            fillOpacity: 0.15,
+                            weight: 2
+                          }}
+                        />
+                      </MapContainer>
+                    </div>
+                  
+                  {/* Location Info */}
+                  <div className="bg-amber-50 p-4 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <MapPin className="w-4 h-4 mt-0.5 text-amber-600 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-stone-700">{property.location}</p>
+                        <p className="text-xs text-stone-500 mt-1">
+                          พิกัด: {property.coordinates.lat.toFixed(4)}, {property.coordinates.lng.toFixed(4)}
+                        </p>
+                        <a 
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${property.coordinates.lat},${property.coordinates.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-600 hover:text-amber-800 text-sm font-medium mt-2 inline-block"
+                        >
+                          เปิดใน Google Maps →
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full h-64 rounded-lg bg-stone-200 flex items-center justify-center">
+                  <p className="text-stone-500">ไม่มีข้อมูลที่ตั้ง</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

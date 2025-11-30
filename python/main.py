@@ -9,6 +9,7 @@ from google import genai
 from dotenv import load_dotenv
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
+from math import radians, sin, cos, sqrt, atan2
 
 load_dotenv()
 
@@ -51,6 +52,75 @@ _ASSET_TYPES = {
     "ตึก": [6, 17],
     "ที่ดิน": [1, 2],
 }
+
+def safe_float(value, default=0.0):
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.replace(',', '').strip())
+        except:
+            return default
+    return default
+
+
+def calculate_distance(lat1, lng1, lat2, lng2):
+    R = 6371  
+    lat1_rad, lon1_rad = radians(lat1), radians(lng1)
+    lat2_rad, lon2_rad = radians(lat2), radians(lng2)
+    
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    a = sin(dlat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    
+    return R * c
+
+def serialize_doc(doc):
+    """แปลง MongoDB document เป็น JSON-serializable dict"""
+    # ลองหา image จากหลาย fields ที่เป็นไปได้
+    image_url = (
+        doc.get("image") or 
+        doc.get("images_main_id") or 
+        doc.get("main_image") or 
+        doc.get("image_url") or
+        "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+    )
+    
+    serialized = {
+        "_id": str(doc["_id"]),
+        "title": doc.get("name_th") or "ไม่มีชื่อ",
+        "price": safe_float(doc.get("asset_details_selling_price")),
+        "asset_type_id": doc.get("asset_type_id"),
+        "location": doc.get("location_village_th") or "ไม่มีที่อยู่",
+        "bedrooms": doc.get("asset_details_number_of_bedrooms", 0),
+        "bathrooms": doc.get("asset_details_number_of_bathrooms", 0),
+        "area": safe_float(doc.get("asset_details_land_size")),
+        "image": image_url,
+    }
+    
+    # เพิ่ม coordinates ถ้ามี location_geo
+    if "location_geo" in doc and doc["location_geo"]:
+        geo = doc["location_geo"]
+        
+        # รองรับทั้ง GeoJSON object และ array
+        if isinstance(geo, dict) and "coordinates" in geo:
+            coords = geo["coordinates"]
+        elif isinstance(geo, list):
+            coords = geo
+        else:
+            coords = []
+        
+        if len(coords) == 2:
+            serialized["coordinates"] = {
+                "lng": coords[0],
+                "lat": coords[1]
+            }
+    
+    return serialized
 
 @lru_cache(maxsize=1024)
 def _embed_text_sync(text: str) -> Tuple[float, ...]:
@@ -98,6 +168,128 @@ async def _gemini_rerank(prompt: str) -> str:
             }
         ).text
     )
+
+@app.get("/map_search")
+async def map_search(
+    lat: float = Query(..., description="ละติจูด (Latitude)"),
+    lng: float = Query(..., description="ลองจิจูด (Longitude)"),
+    radius_km: float = Query(5.0, ge=0.1, le=50, description="รัศมีการค้นหา (กม.)"),
+    limit: int = Query(50, ge=1, le=200, description="จำนวนผลลัพธ์สูงสุด"),
+    min_price: float | None = Query(None, ge=0, description="ราคาต่ำสุด (บาท)"),
+    max_price: float | None = Query(None, ge=0, description="ราคาสูงสุด (บาท)"),
+    asset_type_ids: str | None = Query(None, description="ประเภททรัพย์สิน (คั่นด้วย comma)")
+):
+    """
+    ค้นหาทรัพย์สินตามพิกัดภูมิศาสตร์
+    
+    Example: /map_search?lat=13.7563&lng=100.5018&radius_km=5&min_price=1000000
+    """
+    print("\n" + "="*50)
+    print("=== MAP SEARCH DEBUG ===")
+    print(f"Center: ({lat}, {lng})")
+    print(f"Radius: {radius_km} km")
+    print(f"Limit: {limit}")
+    print(f"Price range: {min_price} - {max_price}")
+    print(f"Asset types: {asset_type_ids}")
+    
+    try:
+        # สร้าง MongoDB geospatial query
+        query = {
+            "location_geo": {
+                "$near": {
+                    "$geometry": {
+                        "type": "Point",
+                        "coordinates": [lng, lat]  # MongoDB: [lng, lat]
+                    },
+                    "$maxDistance": radius_km * 1000  # km -> meters
+                }
+            }
+        }
+        
+        # เพิ่ม filter ประเภททรัพย์
+        if asset_type_ids:
+            try:
+                type_list = [int(x.strip()) for x in asset_type_ids.split(",")]
+                query["asset_type_id"] = {"$in": type_list}
+                print(f"Asset type filter: {type_list}")
+            except ValueError as e:
+                print(f"Warning: Invalid asset_type_ids format: {e}")
+        
+        # Projection - เลือกเฉพาะ fields ที่ต้องการ
+        projection = {
+            "name_th": 1,
+            "asset_details_selling_price": 1,
+            "location_geo": 1,
+            "image": 1,  # ลอง field ทั้งหมดที่อาจเก็บรูป
+            "images_main_id": 1,
+            "main_image": 1,
+            "image_url": 1,
+            "asset_type_id": 1,
+            "asset_details_land_size": 1,
+            "asset_details_number_of_bedrooms": 1,
+            "asset_details_number_of_bathrooms": 1,
+            "location_village_th": 1,
+        }
+        
+        # Query จาก MongoDB
+        cursor = assets_collection.find(query, projection).limit(limit)
+        results = await cursor.to_list(length=limit)
+        
+        print(f"Found {len(results)} properties before filtering")
+        
+        # Filter ราคา (post-query filtering)
+        if min_price is not None or max_price is not None:
+            filtered = []
+            for doc in results:
+                price = safe_float(doc.get("asset_details_selling_price"))
+                
+                if min_price is not None and price < min_price:
+                    continue
+                if max_price is not None and price > max_price:
+                    continue
+                
+                # บันทึกค่า price ที่แปลงแล้วกลับไปใน doc
+                doc["asset_details_selling_price"] = price
+                filtered.append(doc)
+            
+            print(f"After price filter: {len(filtered)} properties")
+            results = filtered
+        
+        # Serialize และคำนวณระยะทาง
+        serialized_results = []
+        for doc in results:
+            serialized = serialize_doc(doc)
+            
+            # คำนวณระยะทาง (ถ้ามี coordinates)
+            if "coordinates" in serialized:
+                coords = serialized["coordinates"]
+                distance = calculate_distance(
+                    lat, lng,
+                    coords["lat"], coords["lng"]
+                )
+                serialized["distance_km"] = round(distance, 2)
+            
+            serialized_results.append(serialized)
+        
+        # เรียงตามระยะทาง (ใกล้ -> ไกล)
+        serialized_results.sort(key=lambda x: x.get("distance_km", float('inf')))
+        
+        print(f"Returning {len(serialized_results)} results")
+        print("="*50 + "\n")
+        
+        return {
+            "count": len(serialized_results),
+            "center": {"lat": lat, "lng": lng},
+            "radius_km": radius_km,
+            "results": serialized_results
+        }
+        
+    except Exception as e:
+        print(f"Error in map_search: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/hybrid_search")
 async def hybrid_search(
@@ -313,33 +505,24 @@ async def hybrid_search(
 
 @app.get("/property/{property_id}")
 async def get_property(property_id: str):
-    print(f"Fetching property ID: {property_id}")
+    print(f"\n=== Fetching property ID: {property_id} ===")
     
     try:
         obj_id = ObjectId(property_id)
     except Exception as e:
-        print(f"Invalid ObjectId: {e}")
+        print(f"[ERROR] Invalid ObjectId: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid property ID: {str(e)}")
 
     try:
         property_doc = await assets_collection.find_one({"_id": obj_id})
         
         if not property_doc:
-            print(f"Property not found: {property_id}")
+            print(f"[INFO] Property not found: {property_id}")
             raise HTTPException(status_code=404, detail="Property not found")
 
-        def safe_float(value, default=0.0):
-            """แปลงค่าเป็น float อย่างปลอดภัย"""
-            if value is None:
-                return default
-            if isinstance(value, (int, float)):
-                return float(value)
-            if isinstance(value, str):
-                try:
-                    return float(value.replace(',', '').strip())
-                except:
-                    return default
-            return default
+        print("[DEBUG] Raw document from MongoDB:")
+        for k, v in property_doc.items():
+            print(f"  {k}: {v}")
 
         # map field ให้ตรงกับ frontend
         property_mapped = {
@@ -356,12 +539,42 @@ async def get_property(property_id: str):
             "image": property_doc.get("image") or "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170"
         }
 
+        # Debug coordinate
+        print("[DEBUG] location_geo field:")
+        print(property_doc.get("location_geo"))
+
+        if "location_geo" in property_doc and property_doc["location_geo"]:
+            geo = property_doc["location_geo"]
+            
+            # รองรับทั้ง GeoJSON object และ array
+            if isinstance(geo, dict) and "coordinates" in geo:
+                coords = geo["coordinates"]
+            elif isinstance(geo, list):
+                coords = geo
+            else:
+                coords = []
+            
+            if len(coords) == 2:
+                property_mapped["coordinates"] = {
+                    "lng": coords[0],
+                    "lat": coords[1]
+                }
+                print(f"[DEBUG] coordinates mapped: {property_mapped['coordinates']}")
+            else:
+                print("[WARN] coordinates missing or incomplete")
+        else:
+            print("[WARN] location_geo not found")
+
+        print("[DEBUG] Mapped property object:")
+        for k, v in property_mapped.items():
+            print(f"  {k}: {v}")
+
         return property_mapped
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Database error: {e}")
+        print(f"[ERROR] Database error: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

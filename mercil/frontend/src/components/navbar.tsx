@@ -114,13 +114,14 @@ const Navbar = () => {
         >
           <div className="px-6 py-4 bg-white/90 backdrop-blur-md space-y-2">
             {[
-              { name: "หน้าหลัก", icon: Home },
-              { name: "ทรัพย์สิน", icon: Building2 },
-              { name: "เกี่ยวกับ", icon: Info },
-              { name: "รายการโปรด", icon: Heart },
-              { name: "ติดต่อ", icon: Mail },
+              { name: "หน้าหลัก", icon: Home , link: '/'},
+              { name: "ทรัพย์สิน", icon: Building2 , link: '#'},
+              { name: "เกี่ยวกับ", icon: Info , link: '#'},
+              ...(user ? [{ name: "รายการโปรด", icon: Heart, link: '/favorite' }] : []),
+              { name: "ติดต่อ", icon: Mail , link: '#'},
             ].map((item) => (
               <a
+                href={item.link || '#'}
                 key={item.name}
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#7a4f35] hover:bg-[#e8dfda]"
               >
