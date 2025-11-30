@@ -1,8 +1,9 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useContext, useState, useEffect } from 'react'
+import { useContext, useState, useEffect } from 'react';
+import React from 'react';
 import { SearchContext } from "../context/AppContext";
 import { AuthContext } from "../context/UserContext";
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from "axios";
@@ -30,7 +31,7 @@ L.Icon.Default.mergeOptions({
 
 const BG_COLOR = " bg-stone-50";
 
-// Custom marker icon
+// Custom marker icon (สีน้ำเงิน - ทรัพย์สิน)
 const customIcon = new L.Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -40,6 +41,47 @@ const customIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41]
 });
+
+// Custom user location icon (สีแดง - ตำแหน่งผู้ใช้)
+const userLocationIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// ฟังก์ชันคำนวณระยะทาง (Haversine formula)
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // รัศมีโลก (กม.)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Component สำหรับปรับ bounds ของแผนที่
+const FitBounds = ({ bounds }: { bounds: L.LatLngBoundsExpression }) => {
+  const map = useMap();
+  
+  React.useEffect(() => {
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: [50, 50], // padding รอบขอบแผนที่
+        maxZoom: 14 // ไม่ให้ zoom เข้าใกล้เกินไป
+      });
+    }
+  }, [bounds, map]);
+  
+  return null;
+};
 
 const ShowDetail = () => {
   const { id } = useParams();
@@ -53,8 +95,49 @@ const ShowDetail = () => {
   
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  
+  // State สำหรับตำแหน่งผู้ใช้
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const user = authContext?.user;
+
+  // useEffect สำหรับขอตำแหน่งผู้ใช้
+  useEffect(() => {
+    if ("geolocation" in navigator) { 
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userPos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(userPos);
+        },
+        (error) => {      
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              setLocationError("ผู้ใช้ปฏิเสธการขอตำแหน่ง");
+              break;
+            case error.POSITION_UNAVAILABLE:
+              setLocationError("ไม่สามารถหาตำแหน่งได้");
+              break;
+            case error.TIMEOUT:
+              setLocationError("หมดเวลาในการหาตำแหน่ง");
+              break;
+            default:
+              setLocationError("เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ");
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      setLocationError("เบราว์เซอร์ไม่รองรับการหาตำแหน่ง");
+    }
+  }, []);
 
   useEffect(() => {
     if (!id) {
@@ -72,12 +155,15 @@ const ShowDetail = () => {
     }
 
     if (propFromContext) {
+      console.log('🔍 Property from context:', propFromContext);
       setProperty(propFromContext);
       setLoading(false);
     } else {
       const fetchProperty = async () => {
         try {
+          console.log('🌐 Fetching property from API...');
           const res = await axios.get(`http://127.0.0.1:8000/property/${id}`);
+          console.log('✅ API response:', res.data);
           setProperty(res.data);
           setError(false);
         } catch (err) {
@@ -113,7 +199,6 @@ const ShowDetail = () => {
           setIsFavorite(response.data.isFavorite);
         }
       } catch (error) {
-        console.error('Error checking favorite:', error);
         setIsFavorite(false);
       }
     };
@@ -193,7 +278,7 @@ const ShowDetail = () => {
       </div>
     );
   }
-
+  
   return (
     <div className={`min-h-screen ${BG_COLOR} font-sans`}>
       <div className="pt-8 pb-4 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -331,7 +416,7 @@ const ShowDetail = () => {
                   {/* Leaflet Map - ใช้ key เพื่อ force re-render เมื่อ coordinates เปลี่ยน */}
                   <div className="relative w-full h-[400px] rounded-lg overflow-hidden">
                     <MapContainer
-                      key={`${property.coordinates.lat}-${property.coordinates.lng}`}
+                      key={`${property.coordinates.lat}-${property.coordinates.lng}-${userLocation?.lat || 0}`}
                       center={[property.coordinates.lat, property.coordinates.lng]}
                       zoom={15}
                       style={{ height: '100%', width: '100%' }}
@@ -342,10 +427,29 @@ const ShowDetail = () => {
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       />
 
+                      {/* ปรับ bounds ให้แสดงทั้งทรัพย์สินและตำแหน่งผู้ใช้ */}
+                      {userLocation && (
+                        <FitBounds 
+                          bounds={[
+                            [property.coordinates.lat, property.coordinates.lng],
+                            [userLocation.lat, userLocation.lng]
+                          ]}
+                        />
+                      )}
+
                       <Marker 
                         position={[property.coordinates.lat, property.coordinates.lng]}
                         icon={customIcon}
                       >
+                        <Tooltip 
+                          permanent 
+                          direction="top"
+                          className="custom-tooltip"
+                        >
+                          <div className="text-center font-semibold">
+                            🏠 {property.title}
+                          </div>
+                        </Tooltip>
                         <Popup>
                           <div className="text-center">
                             <strong>{property.title}</strong><br/>
@@ -353,6 +457,32 @@ const ShowDetail = () => {
                           </div>
                         </Popup>
                       </Marker>
+
+                      {/* User Location Marker (สีแดง) */}
+                      {userLocation && (
+                        <Marker 
+                          position={[userLocation.lat, userLocation.lng]}
+                          icon={userLocationIcon}
+                        >
+                          <Tooltip 
+                            permanent 
+                            direction="top"
+                            className="custom-tooltip"
+                          >
+                            <div className="text-center font-semibold">
+                              📍 ตำแหน่งของคุณ
+                            </div>
+                          </Tooltip>
+                          <Popup>
+                            <div className="text-center">
+                              <strong>📍 ตำแหน่งของคุณ</strong><br/>
+                              <span className="text-xs text-gray-600">
+                                {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}
+                              </span>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      )}
 
                       <Circle
                         center={[property.coordinates.lat, property.coordinates.lng]}
@@ -376,6 +506,23 @@ const ShowDetail = () => {
                         <p className="text-xs text-stone-500 mt-1">
                           พิกัด: {property.coordinates.lat.toFixed(4)}, {property.coordinates.lng.toFixed(4)}
                         </p>
+                        
+                        {/* แสดงระยะทางจากตำแหน่งผู้ใช้ */}
+                        {userLocation && (
+                          <p className="text-xs text-amber-700 font-medium mt-2">
+                            📍 ห่างจากคุณประมาณ {calculateDistance(
+                              userLocation.lat, userLocation.lng,
+                              property.coordinates.lat, property.coordinates.lng
+                            ).toFixed(2)} กม.
+                          </p>
+                        )}
+                        
+                        {locationError && (
+                          <p className="text-xs text-red-500 mt-2">
+                            ⚠️ {locationError}
+                          </p>
+                        )}
+                        
                         <a 
                           href={`https://www.google.com/maps/dir/?api=1&destination=${property.coordinates.lat},${property.coordinates.lng}`}
                           target="_blank"
