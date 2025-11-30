@@ -77,12 +77,30 @@ const saveSearch = async (req, res) => {
     const { query } = req.body;
     if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    req.user.searchHistory.push({ query, timestamp: new Date() });
-    await req.user.save();
+    // ดึงข้อมูล user ล่าสุด
+    const user = await userModel.findById(req.user._id);
+    
+    console.log('🔍 Before - Length:', user.searchHistory.length);
+    
+    // เพิ่มข้อมูลใหม่
+    user.searchHistory.push({ query, timestamp: new Date() });
+    
+    // เก็บเฉพาะ 20 รายการล่าสุด
+    const latestSearches = user.searchHistory.slice(-20);
+    
+    // Update โดยการเขียนทับทั้งหมด
+    await userModel.findByIdAndUpdate(
+      req.user._id,
+      { $set: { searchHistory: latestSearches } }
+    );
+    
+    console.log('✅ After - Length:', latestSearches.length);
+    
     res.json({ success: true });
 
   } catch (error) {
-    res.json({success : false , message : error.message})
+    console.error('❌ Error:', error.message);
+    res.json({ success: false, message: error.message });
   }
 };
 

@@ -99,44 +99,59 @@ const ShowDetail = () => {
   // State สำหรับตำแหน่งผู้ใช้
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
 
   const user = authContext?.user;
+  
+  const requestUserLocation = () => {
+    setIsRequestingLocation(true);
+    setLocationError(null);
 
-  // useEffect สำหรับขอตำแหน่งผู้ใช้
-  useEffect(() => {
-    if ("geolocation" in navigator) { 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const userPos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(userPos);
-        },
-        (error) => {      
-          switch(error.code) {
-            case error.PERMISSION_DENIED:
-              setLocationError("ผู้ใช้ปฏิเสธการขอตำแหน่ง");
-              break;
-            case error.POSITION_UNAVAILABLE:
-              setLocationError("ไม่สามารถหาตำแหน่งได้");
-              break;
-            case error.TIMEOUT:
-              setLocationError("หมดเวลาในการหาตำแหน่ง");
-              break;
-            default:
-              setLocationError("เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ");
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
-      );
-    } else {
+    if (!("geolocation" in navigator)) {
       setLocationError("เบราว์เซอร์ไม่รองรับการหาตำแหน่ง");
+      setIsRequestingLocation(false);
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(userPos);
+        setLocationError(null);
+        setIsRequestingLocation(false);
+        toast.success('อัพเดตตำแหน่งสำเร็จ! 📍');
+      },
+      (error) => {      
+        let errorMsg = "";
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = "คุณได้ปฏิเสธการเข้าถึงตำแหน่ง กรุณาเปิดสิทธิ์ในการตั้งค่าเบราว์เซอร์";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = "ไม่สามารถหาตำแหน่งได้ กรุณาตรวจสอบ GPS";
+            break;
+          case error.TIMEOUT:
+            errorMsg = "หมดเวลาในการหาตำแหน่ง กรุณาลองใหม่อีกครั้ง";
+            break;
+          default:
+            errorMsg = "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
+        }
+        setLocationError(errorMsg);
+        setIsRequestingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  useEffect(() => {
+    requestUserLocation();
   }, []);
 
   useEffect(() => {
@@ -161,9 +176,7 @@ const ShowDetail = () => {
     } else {
       const fetchProperty = async () => {
         try {
-          console.log('🌐 Fetching property from API...');
           const res = await axios.get(`http://127.0.0.1:8000/property/${id}`);
-          console.log('✅ API response:', res.data);
           setProperty(res.data);
           setError(false);
         } catch (err) {
@@ -483,17 +496,6 @@ const ShowDetail = () => {
                           </Popup>
                         </Marker>
                       )}
-
-                      <Circle
-                        center={[property.coordinates.lat, property.coordinates.lng]}
-                        radius={500}
-                        pathOptions={{
-                          color: '#be8368',
-                          fillColor: '#be8368',
-                          fillOpacity: 0.15,
-                          weight: 2
-                        }}
-                      />
                     </MapContainer>
                   </div>
                   
@@ -503,24 +505,47 @@ const ShowDetail = () => {
                       <MapPin className="w-4 h-4 mt-0.5 text-amber-600 flex-shrink-0" />
                       <div>
                         <p className="font-medium text-stone-700">{property.location}</p>
-                        <p className="text-xs text-stone-500 mt-1">
+                        <span className="text-xs text-stone-500 mt-1">
                           พิกัด: {property.coordinates.lat.toFixed(4)}, {property.coordinates.lng.toFixed(4)}
-                        </p>
+                        </span>
                         
-                        {/* แสดงระยะทางจากตำแหน่งผู้ใช้ */}
+                        {/* แสดงระยะทางเมื่อมีตำแหน่งผู้ใช้ */}
                         {userLocation && (
-                          <p className="text-xs text-amber-700 font-medium mt-2">
+                          <span className="text-xs text-amber-700 font-medium ml-5">
                             📍 ห่างจากคุณประมาณ {calculateDistance(
                               userLocation.lat, userLocation.lng,
                               property.coordinates.lat, property.coordinates.lng
                             ).toFixed(2)} กม.
-                          </p>
+                          </span>
                         )}
-                        
-                        {locationError && (
-                          <p className="text-xs text-red-500 mt-2">
-                            ⚠️ {locationError}
-                          </p>
+
+                        {/* แสดง error และปุ่มลองใหม่ */}
+                        {locationError && !userLocation && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs text-red-500">
+                              ⚠️ {locationError}
+                            </p>
+                            <button
+                              onClick={requestUserLocation}
+                              disabled={isRequestingLocation}
+                              className="text-xs bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 text-white px-3 py-1.5 rounded-md transition-colors duration-200 font-medium"
+                            >
+                              {isRequestingLocation ? 'กำลังขอตำแหน่ง...' : '📍 ขอสิทธิ์เข้าถึงตำแหน่งอีกครั้ง'}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* ปุ่มรีเฟรชตำแหน่ง (เมื่อมีตำแหน่งแล้ว) */}
+                        {userLocation && (
+                          <div>
+                          <button
+                            onClick={requestUserLocation}
+                            disabled={isRequestingLocation}
+                            className="text-sm text-amber-600 hover:text-amber-800 disabled:text-gray-400 mt-2 font-medium inline-flex items-center"
+                          >
+                            {isRequestingLocation ? '🔄 กำลังอัพเดต...' : '🔄 อัพเดตตำแหน่งของฉัน'}
+                          </button>
+                          </div>
                         )}
                         
                         <a 

@@ -116,7 +116,8 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
       });
 
       setProperties(mapped);
-      
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+
       const token = localStorage.getItem("token");
 
       if (token) {
