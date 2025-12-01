@@ -3,7 +3,7 @@ import { useContext, useState, useEffect } from 'react';
 import React from 'react';
 import { SearchContext } from "../context/AppContext";
 import { AuthContext } from "../context/UserContext";
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap , Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import axios from "axios";
@@ -170,7 +170,6 @@ const ShowDetail = () => {
     }
 
     if (propFromContext) {
-      console.log('🔍 Property from context:', propFromContext);
       setProperty(propFromContext);
       setLoading(false);
     } else {

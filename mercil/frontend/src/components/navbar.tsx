@@ -130,20 +130,21 @@ const Navbar = () => {
               </a>
             ))}
 
-            <Link to={'/register'} className="w-full px-6 py-2.5 bg-white rounded-lg shadow-lg flex items-center justify-center gap-2 text-[#7a4f35]">
-              {user ? (
+            {user ? (
                 <div className="px-6 py-2.5 bg-white rounded-lg shadow-lg flex items-center gap-2 text-[#7a4f35] cursor-pointer hover:bg-[#f4efec] transition">
                   <User className="w-4 h-4" />
                   {user.name}
                   <button onClick={logout} className="ml-2 text-red-500 hover:text-red-700">Logout</button>
                 </div>
               ) : (
-                <Link to={'/login'} className="px-6 py-2.5 bg-white rounded-lg shadow-lg flex items-center gap-2 text-[#7a4f35] hover:bg-[#f4efec] transition">
+                <Link
+                  to="/login"
+                  className="w-full px-6 py-2.5 bg-white rounded-lg shadow-lg flex items-center justify-center gap-2 text-[#7a4f35] hover:bg-[#f4efec] transition"
+                >
                   <User className="w-4 h-4" />
                   เข้าสู่ระบบ
                 </Link>
               )}
-            </Link>
           </div>
         </div>
       </nav>
