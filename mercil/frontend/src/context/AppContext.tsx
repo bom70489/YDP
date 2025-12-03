@@ -58,44 +58,35 @@ const loadRecommendations = async () => {
     const token = localStorage.getItem("token");
     
     if (token) {
-      console.log('🔐 User logged in - fetching favorites from backend');
       try {
         const favRes = await axios.get("http://localhost:4000/api/user/favorites", {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        console.log('✅ Favorites API response:', favRes.data);
         
         if (favRes.data.success && favRes.data.favorites) {
-          // ✅ รองรับทั้ง array of strings และ array of objects
           favorites = favRes.data.favorites.map((item: any) => {
             if (typeof item === 'string') {
-              return item;  // ถ้าเป็น string ใช้เลย
+              return item;  
             } else if (item.propertyId) {
-              return item.propertyId;  // ถ้าเป็น object ดึง propertyId
+              return item.propertyId;  
             }
             return null;
-          }).filter(Boolean);  // กรอง null ออก
-          
-          console.log('❤️ Favorites from backend:', favorites);
+          }).filter(Boolean); 
         }
       } catch (err) {
         console.error('⚠️ Failed to fetch favorites:', err);
       }
     }
 
-    console.log(`📊 Final data - History: ${searchHistory.length}, Favorites: ${favorites.length}`);
-
     const payload = {
       searchHistory: searchHistory,
       favorites: favorites.map((id: string) => ({ propertyId: id }))
     };
 
-    console.log('📤 Sending to /recommendations:', payload);
 
     const res = await axios.post("http://localhost:8000/recommendations", payload);
     
-    console.log('✅ Recommendations response:', res.data);
     
     const resultsArray = res.data.results || [];
 
@@ -136,7 +127,6 @@ const loadRecommendations = async () => {
       return property;
     });
 
-    console.log(`✅ Mapped ${mapped.length} properties`);
     
     setProperties(mapped);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));

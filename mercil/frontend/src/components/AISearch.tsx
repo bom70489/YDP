@@ -16,7 +16,7 @@ const AISearch = () => {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto px-4 md:px-0">
       
       <div className="relative group">
 
@@ -36,7 +36,7 @@ const AISearch = () => {
             group-hover:shadow-[#c8b8b1]/50
           `}
         >
-          <div className="flex items-center px-6 py-4 gap-4">
+          <div className="flex items-center px-4 md:px-6 py-3 md:py-4 gap-3 md:gap-4">
 
             {/* AI Icon กลมสีทองแดง */}
             <div className="w-12 h-12 rounded-full bg-gradient-to-br

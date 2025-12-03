@@ -147,7 +147,7 @@ const Boxsearch = () => {
           relative bg-[#f9f7f5] rounded-3xl shadow-xl p-8
           transition-all duration-300 group-hover:shadow-[#c8b8b1]/40
         ">
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* ประเภททรัพย์สิน */}
             <div>
               <label className="text-sm font-medium text-[#7a4f35] mb-2 flex items-center gap-2">
