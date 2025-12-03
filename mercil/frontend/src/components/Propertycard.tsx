@@ -33,33 +33,32 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
   if (!authContext) return null;
   const { user } = authContext;
 
-  // ✅ เช็คว่าทรัพย์สินนี้อยู่ใน favorites หรือไม่
+  // เช็คว่าทรัพย์สินนี้อยู่ใน favorites หรือไม่
   useEffect(() => {
-  const checkFavorite = async () => {
-    if (!user?.token || !property._id) {
-      setIsFavorite(false); 
-      return;
-    }
-
-    try {
-      const response = await axios.get(
-        `http://localhost:4000/api/user/favorite/check/${property._id}`,
-        { headers: { Authorization: `Bearer ${user.token}` } }
-      );
-
-      if (response.data.success) {
-        setIsFavorite(response.data.isFavorite);
+    const checkFavorite = async () => {
+      if (!user?.token || !property._id) {
+        setIsFavorite(false); 
+        return;
       }
-    } catch (error) {
-      console.error('Error checking favorite:', error);
-      setIsFavorite(false); 
-    }
-  };
 
-  checkFavorite();
-}, [user, property._id]);
+      try {
+        const response = await axios.get(
+          `http://localhost:4000/api/user/favorite/check/${property._id}`,
+          { headers: { Authorization: `Bearer ${user.token}` } }
+        );
 
-  // ✅ Toggle favorite (เพิ่ม/ลบ)
+        if (response.data.success) {
+          setIsFavorite(response.data.isFavorite);
+        }
+      } catch (error) {
+        console.error('Error checking favorite:', error);
+        setIsFavorite(false); 
+      }
+    };
+
+    checkFavorite();
+  }, [user, property._id]);
+
   const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault(); 
     e.stopPropagation(); 
@@ -75,7 +74,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
       setIsLoading(true);
 
       if (isFavorite) {
-        // ลบออกจาก favorites
         const response = await axios.delete(
           'http://localhost:4000/api/user/favorite/remove',
           {
@@ -89,7 +87,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           toast.success('ลบออกจากรายการโปรดแล้ว');
         }
       } else {
-        // เพิ่มเข้า favorites
         const response = await axios.post(
           'http://localhost:4000/api/user/favorite/add',
           { propertyId: property._id },
@@ -98,7 +95,7 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
 
         if (response.data.success) {
           setIsFavorite(true);
-          toast.success('เพิ่มเข้าร้ายการโปรดแล้ว');
+          toast.success('เพิ่มเข้ารายการโปรดแล้ว');
         }
       }
     } catch (error: any) {
@@ -114,7 +111,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
   return (
     <div className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden hover:scale-105 hover:cursor-pointer">
       
-      {/* รูปภาพ */}
       <div className="relative h-56 overflow-hidden">
         <img 
           src={property.image} 
@@ -122,7 +118,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
 
-        {/* ✅ ปุ่มหัวใจ - เปลี่ยนสีตามสถานะ */}
         <button 
           onClick={handleToggleFavorite}
           disabled={isLoading}
@@ -143,7 +138,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           />
         </button>
 
-        {/* Rating */}
         <div className="absolute bottom-3 left-3">
           <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-lg">
             <Star className="w-3 h-3 text-yellow-600 fill-yellow-600" />
@@ -152,21 +146,16 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
         </div>
       </div>
 
-      {/* ข้อมูล */}
       <div className="p-5">
-        
-        {/* หัวข้อ */}
         <h3 className="text-lg font-bold text-gray-800 mb-2 group-hover:text-[#7b5e57] transition-colors duration-200 line-clamp-1">
           {property.title}
         </h3>
         
-        {/* ที่อยู่ */}
         <div className="flex items-center gap-1 text-gray-600 mb-4">
           <MapPin className="w-4 h-4 text-[#a2836e] flex-shrink-0" />
           <span className="text-sm line-clamp-1">{property.location}</span>
         </div>
 
-        {/* รายละเอียด */}
         <div className="flex justify-between mb-4 pb-4 border-b border-gray-200">
           <div className="flex items-center gap-1">
             <Bed className="w-4 h-4 text-[#8d6e63]" />
@@ -182,7 +171,6 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           </div>
         </div>
 
-        {/* ราคาและปุ่ม */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500">ราคา</p>
@@ -212,12 +200,19 @@ const PropertyCardList = () => {
   const context = useContext(SearchContext);
 
   if (!context) {
+    console.error('❌ SearchContext is null!');
     return null;
   }
   
   const { properties, loading } = context;
 
+  console.log('🔍 PropertyCardList render');
+  console.log('📦 Properties:', properties.length);
+  console.log('⏳ Loading:', loading);
+  console.log('📄 First property:', properties[0]); // ← เพิ่มบรรทัดนี้
+
   if (loading) {
+    console.log('⏳ Showing loading spinner');
     return (
       <div className="w-full flex justify-center items-center py-20">
         <div className="w-12 h-12 border-4 border-gray-300 border-t-[#7b5e57] rounded-full animate-spin"></div>
@@ -225,19 +220,23 @@ const PropertyCardList = () => {
     );
   }
 
-  if (!loading && properties.length === 0) {
+  if (properties.length === 0) {
+    console.log('❌ Showing empty state');
     return (
-      <p className="text-center text-gray-600 mt-10">
-        ไม่มีผลลัพธ์
-      </p>
+      <div className="text-center py-20">
+        <p className="text-gray-600 text-lg mb-2">ไม่พบข้อมูลทรัพย์สิน</p>
+        <p className="text-gray-400 text-sm">ลองค้นหาด้วยคำอื่น หรือปรับตัวกรอง</p>
+      </div>
     );
   }
 
+  console.log('✅ Rendering properties grid');
+
   return (
     <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {properties.map((property) => {
-        return <PropertyCard key={property._id} property={property} />;
-      })}
+      {properties.map((property) => (
+        <PropertyCard key={property._id} property={property} />
+      ))}
     </div>
   );
 };

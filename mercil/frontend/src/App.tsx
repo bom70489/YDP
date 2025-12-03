@@ -1,33 +1,34 @@
-import Navbar from './components/navbar.jsx' 
-import AISearch from './components/AISearch.jsx' 
-import Boxsearch from './components/Boxsearch.jsx' 
-import Propertycard from './components/Propertycard.jsx' 
+import Navbar from './components/navbar.tsx' 
+import AISearch from './components/AISearch.tsx' 
+import Boxsearch from './components/Boxsearch.tsx' 
+import Propertycard from './components/Propertycard.tsx' 
+import Footer from './components/Footer.tsx'
+import BackgroundSwitcher from './components/BackgroundPicture.tsx'
 
 const App = () => {
   return (
     <div className='bg-gradient-to-br from-amber-50 via-white to-amber-50'>
      <Navbar />
       
-      {/* อันแรห เต็มหน้าจอ - เพิ่ม pt-20 เพื่อชดเชย Navbar Spacer และปรับโทนสี */}
-      <section className="min-h-screen flex flex-col justify-end pt-20 pb-32 px-8">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-6">
-            
-            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-amber-800 via-amber-700 to-stone-700 bg-clip-text text-transparent">
-              ค้นหาอสังหาริมทรัพย์
-            </h1>
-            <p className="text-xl text-stone-700 max-w-2xl mx-auto">
-              text
-            </p>
+
+      <BackgroundSwitcher>
+        <section className="min-h-screen flex flex-col justify-end pt-20 pb-32 px-8">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-6 ">
+              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-amber-800 via-amber-700 to-stone-700 bg-clip-text text-transparent"></h1>
+
+              <p className="text-xl text-stone-700 max-w-2xl mx-auto"></p>
+            </div>
           </div>
-        </div>
-        <div className="w-full">
-          <AISearch />
-        </div>
-      </section>
+
+          <div className="w-full mt-20  my-16">
+            <AISearch />
+          </div>
+        </section>
+      </BackgroundSwitcher>
 
       {/* Boxsearch - ปรับโทนสี */}
-      <section className="bg-white py-16 px-8">
+      <section className=" py-16 px-8">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-bold text-[#956748] mb-8 text-center">
             ค้นหาแบบละเอียด
@@ -37,7 +38,7 @@ const App = () => {
       </section>
 
       {/* แนะนำบ้าน - ปรับโทนสี */}
-      <section className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100 py-16 px-8">
+      <section className="min-h-scree py-16 px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold text-[#956748] mb-4">
@@ -55,6 +56,9 @@ const App = () => {
 
         </div>
       </section>
+      <>
+      <Footer/>
+      </>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { createContext, useState, type ReactNode } from 'react';
+import { createContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import axios from 'axios';
 
 interface Property {
@@ -28,41 +28,142 @@ interface SearchContextType {
   loading: boolean;
   clear: () => void;
   search: (query: string, filters?: SearchFilters) => void;
+  loadRecommendations: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'search_properties';
+const SEARCH_HISTORY_KEY = 'search_history';
+const FAVORITES_KEY = 'favorites';
 
 export const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export const SearchProvider = ({ children }: { children: ReactNode }) => {
-
-  const [properties, setProperties] = useState<Property[]>(() => {
-    try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
-      
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed;
-      }
-      return [];
-    } catch (err) {
-      return [];
-    }
-  });
-
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
+  const hasInitialized = useRef(false); // ← เพิ่มบรรทัดนี้
   
   const clear = () => {
     setProperties([]);
     sessionStorage.removeItem(STORAGE_KEY);
   };
 
+const loadRecommendations = async () => {
+  console.log('🎯 loadRecommendations called');
+  setLoading(true);
+  
+  try {
+    const searchHistory = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+    let favorites: string[] = [];
+
+    const token = localStorage.getItem("token");
+    
+    if (token) {
+      console.log('🔐 User logged in - fetching favorites from backend');
+      try {
+        const favRes = await axios.get("http://localhost:4000/api/user/favorites", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('✅ Favorites API response:', favRes.data);
+        
+        if (favRes.data.success && favRes.data.favorites) {
+          // ✅ รองรับทั้ง array of strings และ array of objects
+          favorites = favRes.data.favorites.map((item: any) => {
+            if (typeof item === 'string') {
+              return item;  // ถ้าเป็น string ใช้เลย
+            } else if (item.propertyId) {
+              return item.propertyId;  // ถ้าเป็น object ดึง propertyId
+            }
+            return null;
+          }).filter(Boolean);  // กรอง null ออก
+          
+          console.log('❤️ Favorites from backend:', favorites);
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to fetch favorites:', err);
+      }
+    }
+
+    console.log(`📊 Final data - History: ${searchHistory.length}, Favorites: ${favorites.length}`);
+
+    const payload = {
+      searchHistory: searchHistory,
+      favorites: favorites.map((id: string) => ({ propertyId: id }))
+    };
+
+    console.log('📤 Sending to /recommendations:', payload);
+
+    const res = await axios.post("http://localhost:8000/recommendations", payload);
+    
+    console.log('✅ Recommendations response:', res.data);
+    
+    const resultsArray = res.data.results || [];
+
+    if (resultsArray.length === 0) {
+      setProperties([]);
+      return;
+    }
+
+    // Mapping (เหมือนเดิม)
+    const mapped = resultsArray.map((item: any) => {
+      let coordinates: { lat: number; lng: number } | undefined = undefined;
+      
+      if (item.coordinates && item.coordinates.lat && item.coordinates.lng) {
+        coordinates = {
+          lat: item.coordinates.lat,
+          lng: item.coordinates.lng
+        };
+      }
+
+      const property: Property = {
+        _id: item._id,
+        title: item.title || "ไม่มีชื่อ",
+        location: item.location || "ไม่มีที่อยู่",
+        price: Number(item.price || 0).toString(),
+        bedrooms: Number(item.bedrooms) || 0,
+        bathrooms: Number(item.bathrooms) || 0,
+        area: Number(item.area) || 0,
+        rating: 5,
+        description: item.description || "-",
+        type: "ขาย",
+        image: item.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170",
+      };
+
+      if (coordinates && coordinates.lat !== 0 && coordinates.lng !== 0) {
+        property.coordinates = coordinates;
+      }
+      
+      return property;
+    });
+
+    console.log(`✅ Mapped ${mapped.length} properties`);
+    
+    setProperties(mapped);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+
+  } catch (err) {
+    console.error('❌ Error:', err);
+    setProperties([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  useEffect(() => {   
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      loadRecommendations();
+    }
+  }, []); 
+
   const search = async (query: string, filters: SearchFilters = {}) => {
     setLoading(true);
+    
     try {
-      const res = await axios.get("http://localhost:4000/ai/search", {
+      const res = await axios.get("http://localhost:8000/hybrid_search", {
         params: {
-          q: query,
+          query: query,  
+          top_k: 10,
           min_price: filters.min_price,
           max_price: filters.max_price,
           min_area: filters.min_area,
@@ -70,53 +171,45 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         }
       });
         
-      const mapped = res.data.map((item: any) => {
+      const resultsArray = res.data.results || [];
+      
+      const mapped = resultsArray.map((item: any) => {
         let coordinates: { lat: number; lng: number } | undefined = undefined;
         
-        if (item.coordinates) {
+        if (item.coordinates && item.coordinates.lat && item.coordinates.lng) {
           coordinates = {
             lat: item.coordinates.lat,
             lng: item.coordinates.lng
           };
-        } else if (item.location_geo) {
-          const geo = item.location_geo;
-          
-          if (geo.coordinates && Array.isArray(geo.coordinates) && geo.coordinates.length === 2) {
-            coordinates = {
-              lng: geo.coordinates[0],
-              lat: geo.coordinates[1]
-            };
-          } else if (Array.isArray(geo) && geo.length === 2) {
-            coordinates = {
-              lng: geo[0],
-              lat: geo[1]
-            };
-          }
         }
 
         const property: Property = {
-          _id: (item._id?._id || item._id?.$oid || item._id || item.id)?.toString(),
-          title: item.name_th,
-          location: item.location_village_th || "ไม่มีที่อยู่",
-          price: Number(item.price).toString(),
-          bedrooms: item.asset_details_number_of_bedrooms || 0,
-          bathrooms: item.asset_details_number_of_bathrooms || 0,
-          area: item.asset_details_land_size || 0,
-          rating: item.scores || 5,
-          description: item.ai_description_th || "-",
-          type: item.type || "ขาย",
+          _id: item._id,
+          title: item.title || "ไม่มีชื่อ",
+          location: item.location || "ไม่มีที่อยู่",
+          price: Number(item.price || 0).toString(),
+          bedrooms: Number(item.bedrooms) || 0,
+          bathrooms: Number(item.bathrooms) || 0,
+          area: Number(item.area) || 0,
+          rating: 5,
+          description: item.description || "-",
+          type: "ขาย",
           image: item.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
         };
 
-        // เพิ่ม coordinates เฉพาะเมื่อมีค่าที่ถูกต้อง
         if (coordinates && coordinates.lat !== 0 && coordinates.lng !== 0) {
           property.coordinates = coordinates;
         }
+        
         return property;
       });
 
       setProperties(mapped);
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+
+      const currentHistory = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+      const updatedHistory = [query, ...currentHistory.filter((q: string) => q !== query)].slice(0, 10);
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updatedHistory));
 
       const token = localStorage.getItem("token");
 
@@ -136,6 +229,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       if (axios.isAxiosError(err)) {
         console.error('❌ API Error details:', err.response?.data);
+        console.error('❌ Request params:', err.config?.params);
       }
     } finally {
       setLoading(false);
@@ -143,7 +237,13 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <SearchContext.Provider value={{ properties, search, loading, clear }}>
+    <SearchContext.Provider value={{ 
+      properties, 
+      search, 
+      loading, 
+      clear, 
+      loadRecommendations 
+    }}>
       {children}
     </SearchContext.Provider>
   );

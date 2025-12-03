@@ -41,7 +41,7 @@ const Boxsearch = () => {
     }
   });
 
-  const { search, clear } = useContext(SearchContext) || {}
+  const { search, clear , loadRecommendations } = useContext(SearchContext) || {}
   const hasUserInteracted = useRef(false);
 
   useEffect(() => {
@@ -69,6 +69,7 @@ const Boxsearch = () => {
 
     if (!hasAnyValue && hasUserInteracted.current) {
       clear?.()
+      loadRecommendations?.()
       return;
     }
 

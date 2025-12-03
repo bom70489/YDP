@@ -128,7 +128,6 @@ const FavoritesPage = () => {
     }
   }, [user, authLoading, navigate]);
 
-  // ดึงข้อมูล favorites จาก backend
   useEffect(() => {
     const fetchFavorites = async () => {
       if (!user?.token) return;

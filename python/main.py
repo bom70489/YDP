@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 from bson import ObjectId
 from fastapi.middleware.cors import CORSMiddleware
 from math import radians, sin, cos, sqrt, atan2
+import numpy as np
+from pydantic import BaseModel
+from typing import Optional
 
 load_dotenv()
 
@@ -53,6 +56,13 @@ _ASSET_TYPES = {
     "ที่ดิน": [1, 2],
 }
 
+class FavoriteItem(BaseModel):
+    propertyId: str
+
+class UserInteraction(BaseModel):
+    searchHistory: List[str] = []
+    favorites: List[FavoriteItem] = []
+
 def safe_float(value, default=0.0):
     if value is None:
         return default
@@ -65,6 +75,20 @@ def safe_float(value, default=0.0):
             return default
     return default
 
+def safe_int(value, default=0):
+    """แปลงค่าเป็น int อย่างปลอดภัย"""
+    if value is None:
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except:
+            return default
+    return default
 
 def calculate_distance(lat1, lng1, lat2, lng2):
     R = 6371  
@@ -169,47 +193,79 @@ async def _gemini_rerank(prompt: str) -> str:
         ).text
     )
 
+async def get_user_persona_vector(payload: UserInteraction) -> Optional[List[float]]:
+    vectors = []
+    weights = []
+
+    # --- 1. จัดการ Search History ---
+    # เอา 5 คำล่าสุดย้อนหลัง
+    recent_searches = payload.searchHistory[-5:][::-1] 
+    
+    for i, text in enumerate(recent_searches):
+        if not text.strip(): continue
+        vec = await embed_text(text)
+        vectors.append(vec)
+        # Weight ลดหลั่นตามเวลา (ล่าสุด 0.5)
+        weights.append(max(0.1, 0.5 - (i * 0.05)))
+
+    # --- 2. จัดการ Favorites ---
+    if payload.favorites:
+        fav_ids = []
+        for item in payload.favorites:
+            try:
+                fav_ids.append(ObjectId(item.propertyId))
+            except:
+                continue # ข้ามถ้า ID ผิด Format
+        
+        if fav_ids:
+            # Query ดึงข้อมูลบ้านจาก ID
+            cursor = assets_collection.find(
+                {"_id": {"$in": fav_ids}}, # ใช้ _id ในการหา
+                {"name_th": 1, "ai_description_th": 1, "asset_details_selling_price": 1}
+            )
+            fav_items = await cursor.to_list(length=None)
+
+            for item in fav_items:
+                # สร้าง Text ตัวแทนบ้าน
+                desc = f"{item.get('name_th', '')} ราคา {item.get('asset_details_selling_price', '')}"
+                if 'ai_description_th' in item:
+                    desc += f" {item['ai_description_th'][:100]}"
+                
+                vec = await embed_text(desc)
+                vectors.append(vec)
+                weights.append(1.5) # Favorites สำคัญมาก (x1.5)
+
+    # --- 3. หาค่าเฉลี่ย ---
+    if not vectors:
+        return None
+        
+    weighted_avg = np.average(vectors, axis=0, weights=weights)
+    return weighted_avg.tolist()
+
 @app.get("/hybrid_search")
 async def hybrid_search(
     query: str = Query("ทรัพย์สินทั้งหมด", description="คำค้นหา"),
     top_k: int = 10,
-    min_price: float | None = None,
-    max_price: float | None = None,
-    min_area: float | None = None,
-    max_area: float | None = None
+    min_price: Optional[float] = None,  
+    max_price: Optional[float] = None,  
+    min_area: Optional[float] = None,   
+    max_area: Optional[float] = None    
 ):
-    print("\n" + "="*50)
-    print("=== FASTAPI DEBUG START ===")
-    print("="*50)
-    print(f"Query: '{query}'")
-    print(f"Min Price: {min_price} (type: {type(min_price).__name__})")
-    print(f"Max Price: {max_price} (type: {type(max_price).__name__})")
-    print(f"Min Area: {min_area} (type: {type(min_area).__name__ if min_area else 'None'})")
-    print(f"Max Area: {max_area} (type: {type(max_area).__name__ if max_area else 'None'})")
     
     text_query, asset_type_ids = extract_query_filters(query)
-    print(f"After extraction - Text: '{text_query}' | Asset Types: {asset_type_ids}")
     
     query_text_for_embedding = text_query.strip() if text_query.strip() else "ทรัพย์สินทั้งหมด"
-    print(f"Embedding text: '{query_text_for_embedding}'")
     
     query_emb = await embed_text(query_text_for_embedding)
-    print(f"Embedding dimension: {len(query_emb)}")
 
     mongo_filter = {}
     if asset_type_ids:
         mongo_filter["asset_type_id"] = {"$in": asset_type_ids}
-        print(f"Asset type filter added: {asset_type_ids}")
 
     has_price_filter = min_price is not None or max_price is not None
     has_area_filter = min_area is not None or max_area is not None
     num_candidates = 500 if (has_price_filter or has_area_filter) else 100
-    
-    print(f"\n--- Vector Search Setup ---")
-    print(f"Num candidates: {num_candidates}")
-    print(f"Has price filter: {has_price_filter}")
-    print(f"Has area filter: {has_area_filter}")
-    
+     
     pipeline_params = {
         "index": VECTOR_SEARCH_INDEX_NAME,
         "path": "asset_vector",
@@ -241,8 +297,6 @@ async def hybrid_search(
         ])
         
         candidates = await cursor.to_list(length=num_candidates)
-        print(f"\n--- Vector Search Results ---")
-        print(f"Found {len(candidates)} documents from vector search")
         
         # แสดงตัวอย่าง 3 รายการแรก
         if candidates:
@@ -253,16 +307,12 @@ async def hybrid_search(
                 print(f"  {i+1}. {doc.get('name_th', 'N/A')} - Price: {price} type: {type(price).__name__},\n Area: {area} (type: {type(area).__name__})")
         
     except Exception as e:
-        print(f"\n!!! MONGODB ERROR !!!")
-        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         return {"query": query, "results": [], "error": str(e)}
 
     # Filter ราคาหลัง vector search
     if has_price_filter:
-        print(f"\n--- Price Filtering ---")
-        print(f"Min: {min_price}, Max: {max_price}")
         
         filtered = []
         for doc in candidates:
@@ -287,23 +337,11 @@ async def hybrid_search(
                 continue
             
             filtered.append(doc)
-        
-        print(f"Before filter: {len(candidates)} | After filter: {len(filtered)}")
-    
-    
-        if filtered and len(filtered) < 5:
-            print("Filtered results:")
-            for doc in filtered:
-                p = doc.get('asset_details_selling_price', 0)
-                print(f"  - {doc.get('name_th', 'N/A')} - {p} บาท")
-        
+
         candidates = filtered
     
     
     if has_area_filter:
-        print(f"\n--- Area Filtering ---")
-        print(f"Min area: {min_area}, Max area: {max_area}")
-
         before_count = len(candidates)  
         filtered_area = []
         
@@ -315,7 +353,6 @@ async def hybrid_search(
                     area = float(area.replace(',', '').strip())
                     doc["asset_details_land_size"] = area  
                 except:
-                    print(f"Warning: Cannot convert area '{area}' to float")
                     area = 0
             elif area is None:
                 area = 0
@@ -327,20 +364,14 @@ async def hybrid_search(
 
             filtered_area.append(doc)
 
-    
-        print(f"Before area filter: {before_count} | After: {len(filtered_area)}")
         candidates = filtered_area
 
     if not candidates:
-        print("\n!!! NO RESULTS FOUND !!!")
-        print("="*50)
         return {"query": query, "results": []}
 
     # Rerank ด้วย Gemini
-    print(f"\n--- Reranking ---")
     rerank_count = min(max(3 * top_k, 10), len(candidates))
     to_rerank = candidates[:rerank_count]
-    print(f"Reranking top {rerank_count} candidates")
 
     prompt = "You are an expert search relevancy judge. Respond with JSON array only.\n"
     prompt += f"User query: \"{query}\"\nCandidates:\n"
@@ -354,9 +385,7 @@ async def hybrid_search(
         text = await _gemini_rerank(prompt)
         parsed = json.loads(text)
         scores_map = {item["id"]: item["score"] for item in parsed}
-        print("Reranking successful")
     except Exception as e:
-        print(f"Reranking error: {e}")
         for idx, doc in enumerate(to_rerank):
             scores_map[idx + 1] = doc.get("score", 0.0)
 
@@ -364,6 +393,7 @@ async def hybrid_search(
     for idx, doc in enumerate(candidates):
         doc["_rerank_score"] = scores_map.get(idx + 1, doc.get("score", 0.0))
         doc["_id"] = str(doc["_id"])
+        doc["title"] = str(doc["name_th"])
         doc["bedrooms"] = doc.get("asset_details_number_of_bedrooms", 0)
         doc["bathrooms"] = doc.get("asset_details_number_of_bathrooms", 0)
         doc["description"] = doc.get("ai_description_th", "")
@@ -398,11 +428,6 @@ async def hybrid_search(
     results_sorted = sorted(candidates, key=lambda d: d["_rerank_score"], reverse=True)
     final_results = results_sorted[:top_k]
     
-    print(f"\n--- Final Results ---")
-    print(f"Returning {len(final_results)} results")
-    print("="*50)
-    print()
-    
     return {"query": query, "results": final_results}
 
 @app.get("/property/{property_id}")
@@ -422,7 +447,6 @@ async def get_property(property_id: str):
             print(f"[INFO] Property not found: {property_id}")
             raise HTTPException(status_code=404, detail="Property not found")
 
-        print("[DEBUG] Raw document from MongoDB:")
         for k, v in property_doc.items():
             print(f"  {k}: {v}")
 
@@ -438,12 +462,8 @@ async def get_property(property_id: str):
             "rating": 5,
             "description": property_doc.get("ai_description_th") or "-",
             "type": "ขาย" if property_doc.get("announcement_status_status_id", 1) == 1 else "ไม่ขาย",
-            "image": property_doc.get("image") or "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170"
+            "image": property_doc.get("image") or "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
         }
-
-        # Debug coordinate
-        print("[DEBUG] location_geo field:")
-        print(property_doc.get("location_geo"))
 
         if "location_geo" in property_doc and property_doc["location_geo"]:
             geo = property_doc["location_geo"]
@@ -481,6 +501,154 @@ async def get_property(property_id: str):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
+@app.post("/recommendations")
+async def get_recommendations(
+    payload: UserInteraction,
+    limit: int = 10
+):
+    # 1. สร้าง User Vector
+    user_vector = await get_user_persona_vector(payload)
+    
+    if not user_vector:
+        print("⚠️ No user vector - returning empty results")
+        return {"message": "No history provided", "results": []}
+
+    print("✅ User vector created successfully")
+
+    # 2. เตรียม Exclude List
+    exclude_ids = []
+    for item in payload.favorites:
+        try:
+            exclude_ids.append(ObjectId(item.propertyId))
+        except:
+            pass
+    
+    print(f"Excluding {len(exclude_ids)} favorite properties")
+
+    # 3. Vector Search Pipeline
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": VECTOR_SEARCH_INDEX_NAME,
+                "path": "asset_vector",
+                "queryVector": user_vector,
+                "numCandidates": limit * 10,
+                "limit": limit * 5  # ← เพิ่มเป็น 5x เพื่อให้มีข้อมูลพอสำหรับ rerank
+            }
+        },
+        {
+            "$project": {
+                "score": {"$meta": "vectorSearchScore"},
+                "_id": 1,
+                "name_th": 1,
+                "asset_details_selling_price": 1,
+                "ai_description_th": 1,
+                "asset_details_number_of_bedrooms": 1,  # ← เพิ่ม
+                "asset_details_number_of_bathrooms": 1,  # ← เพิ่ม
+                "asset_details_land_size": 1,  # ← เพิ่ม
+                "location_village_th": 1,  # ← เพิ่ม
+                "location_geo": 1,
+                "image": 1,  # ← เพิ่ม
+                "images_main_id": 1
+            }
+        }
+    ]
+
+    try:
+        cursor = assets_collection.aggregate(pipeline)
+        candidates = await cursor.to_list(length=limit * 5)
+        
+        if candidates:
+            print("\nSample results:")
+            for i, doc in enumerate(candidates[:3]):
+                print(f"  {i+1}. {doc.get('name_th', 'N/A')} - Score: {doc.get('score', 0):.4f}")
+        
+    except Exception as e:
+        print(f"❌ Vector search error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"count": 0, "results": []}
+
+    if not candidates:
+        print("⚠️ No candidates found")
+        return {"count": 0, "results": []}
+
+    # 4. Rerank ด้วย Gemini (เหมือน hybrid_search)
+    rerank_count = min(max(3 * limit, 10), len(candidates))
+    to_rerank = candidates[:rerank_count]
+
+    # สร้าง prompt สำหรับ Gemini
+    search_context = ", ".join(payload.searchHistory[-3:]) if payload.searchHistory else "general preferences"
+    
+    prompt = "You are an expert at personalizing property recommendations. Respond with JSON array only.\n"
+    prompt += f"User interests: \"{search_context}\"\n"
+    prompt += "Candidates:\n"
+    
+    for idx, doc in enumerate(to_rerank):
+        desc = doc.get("ai_description_th", "")[:1000]
+        price = doc.get("asset_details_selling_price", "N/A")
+        location = doc.get("location_village_th", "N/A")
+        prompt += f"{idx+1}. {doc.get('name_th','N/A')} - ฿{price} - {location}\n"
+        prompt += f"   {desc[:200]}\n"
+    
+    prompt += "\nScore each property between 0.0 and 1.0 based on relevance to user interests.\n"
+    prompt += "Output JSON array: [{\"id\":1,\"score\":0.92}, ...]"
+
+    scores_map = {}
+    try:
+        text = await _gemini_rerank(prompt)
+        parsed = json.loads(text)
+        scores_map = {item["id"]: item["score"] for item in parsed}
+    except Exception as e:
+        # Fallback: ใช้ vector score
+        for idx, doc in enumerate(to_rerank):
+            scores_map[idx + 1] = doc.get("score", 0.0)
+
+    # 5. จัดเตรียมผลลัพธ์ (เหมือน hybrid_search)
+    for idx, doc in enumerate(candidates):
+        doc["_rerank_score"] = scores_map.get(idx + 1, doc.get("score", 0.0))
+        doc["_id"] = str(doc["_id"])
+        doc["title"] = str(doc.get("name_th", "ไม่มีชื่อ"))
+        doc["bedrooms"] = safe_int(doc.get("asset_details_number_of_bedrooms"))
+        doc["bathrooms"] = safe_int(doc.get("asset_details_number_of_bathrooms"))
+        doc["description"] = doc.get("ai_description_th", "")
+        doc["area"] = safe_float(doc.get("asset_details_land_size"))
+        doc["location"] = doc.get("location_village_th", "ไม่มีที่อยู่")
+        doc["price"] = safe_float(doc.get("asset_details_selling_price"))
+        
+        # จัดการ image
+        image_value = doc.get("image") or doc.get("images_main_id")
+        if isinstance(image_value, (int, float)) or not image_value:
+            doc["image"] = "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
+        else:
+            doc["image"] = image_value
+
+        # จัดการ coordinates
+        if "location_geo" in doc and doc["location_geo"]:
+            geo = doc["location_geo"]
+            
+            if isinstance(geo, dict) and "coordinates" in geo:
+                coords = geo["coordinates"]
+            elif isinstance(geo, list):
+                coords = geo
+            else:
+                coords = []
+            
+            if len(coords) == 2:
+                doc["coordinates"] = {
+                    "lng": float(coords[0]),
+                    "lat": float(coords[1])
+                }
+
+    # 6. เรียงลำดับและตัดเอาแค่ที่ต้องการ
+    results_sorted = sorted(candidates, key=lambda d: d["_rerank_score"], reverse=True)
+    final_results = results_sorted[:limit]
+
+    return {
+        "count": len(final_results),
+        "results": final_results
+    }
 
 @app.get("/")
 async def root():
