@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import Navbar from "../components/navbar";
 
 interface FAQItem {
   question: string;
@@ -44,6 +45,7 @@ export default function Questionspage() {
 
   return (
     <section className="min-h-screen bg-gradient-to-br from-[#F6E5D6] via-[#FFF5EA] to-[#F6E5D6] py-20 px-6 md:px-12">
+      <Navbar />
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16">
