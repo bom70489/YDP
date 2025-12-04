@@ -1,0 +1,196 @@
+# 🏠 Real Estate Search API
+
+Backend API สำหรับระบบค้นหาทรัพย์สินอสังหาริมทรัพย์ พร้อม AI-powered search, user authentication และระบบ favorites
+
+## ✨ Features
+
+- 🔍 **Hybrid Search** - Vector search + Keyword search + Filters
+- 🤖 **AI Reranking** - ใช้ Google Gemini 2.5 Flash จัดอันดับผลลัพธ์
+- 👤 **User Authentication** - JWT-based authentication
+- ❤️ **Favorites System** - บันทึกทรัพย์สินที่ชอบ
+- 📊 **Search History** - บันทึกประวัติการค้นหา (20 รายการ)
+- 🎯 **Personalized Recommendations** - แนะนำทรัพย์สินตามความสนใจ
+- 🗺️ **Geospatial Data** - พิกัดและข้อมูลที่ตั้ง
+
+## 🛠️ Tech Stack
+
+- **Framework**: FastAPI
+- **Database**: MongoDB (with vector search)
+- **AI**: Google Gemini API
+- **Authentication**: JWT (python-jose)
+- **Password Hashing**: bcrypt
+- **Async Driver**: Motor (async MongoDB driver)
+
+## 📋 Prerequisites
+
+- Python 3.10+
+- MongoDB 7.0+ (with Atlas Vector Search)
+- Google Gemini API Key
+
+## 🚀 Installation
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd python
+```
+
+### 2. Create virtual environment
+
+```bash
+# Create venv
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (Mac/Linux)
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Setup environment variables
+
+```bash
+# Copy .env.example to .env
+cp .env.example .env
+
+# Edit .env and add your credentials
+notepad .env  # Windows
+nano .env     # Mac/Linux
+```
+
+Required environment variables:
+```env
+MONGO_URI=mongodb://localhost:27017
+GEMINI_API_KEY=your_gemini_api_key
+JWT_SECRET=your_secret_key
+```
+
+### 5. Start MongoDB
+
+```bash
+# Windows
+net start MongoDB
+
+# Mac (Homebrew)
+brew services start mongodb-community
+
+# Linux
+sudo systemctl start mongod
+
+# Docker
+docker run -d -p 27017:27017 --name mongodb mongo:7.0
+```
+
+### 6. Run the server
+
+```bash
+python main.py
+```
+
+Server will start at: `http://localhost:8000`
+
+## 📚 API Documentation
+
+### Interactive API Docs
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+### API Endpoints
+
+#### Authentication
+- `POST /api/auth/register` - สมัครสมาชิก
+- `POST /api/auth/login` - เข้าสู่ระบบ
+
+#### Property Search
+- `GET /hybrid_search` - ค้นหาทรัพย์สิน (hybrid search)
+- `GET /property/{id}` - ดูรายละเอียดทรัพย์สิน
+- `POST /recommendations` - แนะนำทรัพย์สินตามความสนใจ
+
+#### Search History
+- `POST /api/search/save` - บันทึกประวัติค้นหา (สมาชิก)
+- `POST /api/search/guest` - บันทึกประวัติค้นหา (Guest)
+
+#### Favorites
+- `POST /api/favorites/add` - เพิ่มรายการโปรด
+- `POST /api/favorites/remove` - ลบรายการโปรด
+- `GET /api/favorites/list` - ดูรายการโปรดทั้งหมด
+- `GET /api/favorites/check/{propertyId}` - เช็คว่าอยู่ในรายการโปรดหรือไม่
+
+## 🧪 Testing
+
+### Test with curl
+
+```bash
+# Register
+curl -X POST "http://localhost:8000/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"12345678","name":"Test User"}'
+
+# Login
+curl -X POST "http://localhost:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"12345678"}'
+
+# Search
+curl "http://localhost:8000/hybrid_search?query=คอนโด+บางนา&min_price=2000000&max_price=5000000"
+```
+
+## 📁 Project Structure
+
+```
+python/
+├── main.py                 # Main FastAPI application
+├── routes/
+│   ├── __init__.py
+│   ├── auth_routes.py     # Authentication endpoints
+│   ├── search_routes.py   # Search history endpoints
+│   ├── favorite_routes.py # Favorites endpoints
+│   └── property_routes.py # Property search endpoints
+├── middleware/
+│   └── auth_middleware.py # JWT authentication middleware
+├── utils/
+│   ├── auth.py            # Password hashing utilities
+│   └── validators.py      # Input validation
+├── requirements.txt       # Python dependencies
+├── .env.example          # Environment variables template
+├── .gitignore            # Git ignore rules
+└── README.md             # This file
+```
+
+## 🐛 Troubleshooting
+
+### MongoDB Connection Error
+
+```
+Error: pymongo.errors.ServerSelectionTimeoutError
+```
+
+**Solution**: Make sure MongoDB is running
+```bash
+mongosh --eval "db.version()"
+```
+
+### bcrypt Import Error
+
+```
+Error: cannot import name '_bcrypt'
+```
+
+**Solution**: Reinstall bcrypt
+```bash
+pip uninstall bcrypt passlib -y
+pip install bcrypt==4.0.1 passlib==1.7.4
+```
+
+---
+
+Made with ❤️ for Real Estate Search
