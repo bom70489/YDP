@@ -29,6 +29,9 @@ interface FavoritePropertyCardProps {
   onRemove: (id: string) => void;
 }
 
+// Base URL for Python backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const FavoritePropertyCard = ({ property, onRemove }: FavoritePropertyCardProps) => (
   <div className="bg-[#F8F5F2] rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group">
     <div className="flex flex-col md:flex-row">
@@ -116,11 +119,11 @@ const FavoritesPage = () => {
   const navigate = useNavigate();
 
   if (!context) return null;
-  const { user, loading: authLoading } = context; // ✅ ดึง authLoading มา
+  const { user, loading: authLoading } = context;
 
-  // ✅ รอให้ auth loading เสร็จก่อนเช็ค user
+  // Wait for auth loading to complete before checking user
   useEffect(() => {
-    if (authLoading) return; // ถ้ายังโหลดอยู่ ให้รอ
+    if (authLoading) return;
     
     if (!user) {
       toast.error('กรุณาเข้าสู่ระบบก่อน');
@@ -135,8 +138,8 @@ const FavoritesPage = () => {
       try {
         setLoading(true);
 
-        // 1. ดึงรายการ propertyId จาก Express backend
-        const favResponse = await axios.get('http://localhost:4000/api/user/favorite/list', {
+        // 1. Get favorite list from Python backend
+        const favResponse = await axios.get(`${API_BASE_URL}/api/favorites/list`, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
 
@@ -151,10 +154,10 @@ const FavoritesPage = () => {
           return;
         }
 
-        // 2. ✅ ดึงข้อมูลทรัพย์สินแต่ละรายการจาก FastAPI โดยตรง
+        // 2. Fetch property details for each favorite from Python backend
         const propertyPromises = favoriteItems.map(async (fav) => {
           try {
-            const propResponse = await axios.get(`http://127.0.0.1:8000/property/${fav.propertyId}`);
+            const propResponse = await axios.get(`${API_BASE_URL}/property/${fav.propertyId}`);
             return propResponse.data;
           } catch (error) {
             console.error(`Error fetching property ${fav.propertyId}:`, error);
@@ -182,10 +185,14 @@ const FavoritesPage = () => {
     if (!user?.token) return;
 
     try {
-      const response = await axios.delete('http://localhost:4000/api/user/favorite/remove', {
-        data: { propertyId },
-        headers: { Authorization: `Bearer ${user.token}` }
-      });
+      // Remove from Python backend
+      const response = await axios.post(
+        `${API_BASE_URL}/api/favorites/remove`,
+        { propertyId },
+        {
+          headers: { Authorization: `Bearer ${user.token}` }
+        }
+      );
 
       if (response.data.success) {
         setFavorites(favorites.filter(fav => fav._id !== propertyId));
@@ -205,7 +212,7 @@ const FavoritesPage = () => {
         return true;
       });
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className='bg-gradient-to-br from-[#e7d0c2] via-[#e9cbb8] to-amber-50 min-h-screen flex items-center justify-center'>
         <div className="text-center">

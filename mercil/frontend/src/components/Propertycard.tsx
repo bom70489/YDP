@@ -24,6 +24,9 @@ interface PropertyCardProps {
   property: Property;
 }
 
+// Base URL for Python backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const PropertyCard = ({ property }: PropertyCardProps) => {
   const location = useLocation();
   const authContext = useContext(AuthContext);
@@ -33,7 +36,7 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
   if (!authContext) return null;
   const { user } = authContext;
 
-  // เช็คว่าทรัพย์สินนี้อยู่ใน favorites หรือไม่
+  // Check if property is in favorites
   useEffect(() => {
     const checkFavorite = async () => {
       if (!user?.token || !property._id) {
@@ -43,7 +46,7 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
 
       try {
         const response = await axios.get(
-          `http://localhost:4000/api/user/favorite/check/${property._id}`,
+          `${API_BASE_URL}/api/favorites/check/${property._id}`,
           { headers: { Authorization: `Bearer ${user.token}` } }
         );
 
@@ -74,12 +77,11 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
       setIsLoading(true);
 
       if (isFavorite) {
-        const response = await axios.delete(
-          'http://localhost:4000/api/user/favorite/remove',
-          {
-            data: { propertyId: property._id },
-            headers: { Authorization: `Bearer ${user.token}` }
-          }
+        // Remove from favorites
+        const response = await axios.post(
+          `${API_BASE_URL}/api/favorites/remove`,
+          { propertyId: property._id },
+          { headers: { Authorization: `Bearer ${user.token}` } }
         );
 
         if (response.data.success) {
@@ -87,8 +89,9 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
           toast.success('ลบออกจากรายการโปรดแล้ว');
         }
       } else {
+        // Add to favorites
         const response = await axios.post(
-          'http://localhost:4000/api/user/favorite/add',
+          `${API_BASE_URL}/api/favorites/add`,
           { propertyId: property._id },
           { headers: { Authorization: `Bearer ${user.token}` } }
         );
@@ -209,7 +212,6 @@ const PropertyCardList = () => {
   console.log('🔍 PropertyCardList render');
   console.log('📦 Properties:', properties.length);
   console.log('⏳ Loading:', loading);
-  console.log('📄 First property:', properties[0]); // ← เพิ่มบรรทัดนี้
 
   if (loading) {
     console.log('⏳ Showing loading spinner');
@@ -229,8 +231,6 @@ const PropertyCardList = () => {
       </div>
     );
   }
-
-  console.log('✅ Rendering properties grid');
 
   return (
     <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

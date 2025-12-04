@@ -19,7 +19,6 @@ const Register = () => {
     e.preventDefault();
     try {
       await register(name , email, password);
-      toast.success("Login success!");
       navigate("/"); 
     } catch (err: any) {
       toast.error(err.message);

@@ -7,10 +7,13 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  loading: boolean; 
+  loading: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Base URL for Python FastAPI backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<{ name: string; token: string } | null>(null);
@@ -28,34 +31,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const register = async (name: string, email: string, password: string) => {
-    const res = await axios.post('http://localhost:4000/api/user/register', { name, email, password });
+    try {
+      // เปลี่ยน URL ไปที่ Python backend
+      const res = await axios.post(`${API_BASE_URL}/api/auth/register`, { 
+        name, 
+        email, 
+        password 
+      });
 
-    if (!res.data.success) {
-      throw new Error(res.data.message);
+      if (!res.data.success) {
+        throw new Error(res.data.message);
+      }
+
+      setUser({ name: res.data.username, token: res.data.token });
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('username', res.data.username);
+      
+      toast.success('Register successfully!');
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Registration failed';
+      toast.error(message);
+      throw error;
     }
-
-    setUser({ name: res.data.username, token: res.data.token });
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('username', res.data.username);
   };
 
   const login = async (email: string, password: string) => {
-    const res = await axios.post('http://localhost:4000/api/user/login', { email, password });
-    if (!res.data.success) {
-      throw new Error(res.data.message);
-    }
+    try {
+      // เปลี่ยน URL ไปที่ Python backend
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, { 
+        email, 
+        password 
+      });
 
-    setUser({ name: res.data.username, token: res.data.token });
-    localStorage.setItem('token', res.data.token);
-    localStorage.setItem('username', res.data.username);
+      if (!res.data.success) {
+        throw new Error(res.data.message);
+      }
+
+      setUser({ name: res.data.username, token: res.data.token });
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('username', res.data.username);
+      
+      toast.success('Login successfully!');
+    } catch (error: any) {
+      const message = error.response?.data?.message || error.message || 'Login failed';
+      toast.error(message);
+      throw error;
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('username');
-
-    toast.success("Logout Successfully!")
+    toast.success('Logout successfully!');
   };
 
   return (
