@@ -76,7 +76,7 @@ async def register(request: RegisterRequest):
         if exists:
             return AuthResponse(
                 success=False,
-                message="Email already exists"
+                message="อีเมลถูกใช้ไปเเล้ว"
             )
         
         # Validate email format
@@ -90,7 +90,7 @@ async def register(request: RegisterRequest):
         if not is_strong_password(request.password, min_length=8):
             return AuthResponse(
                 success=False,
-                message="Please enter a strong password"
+                message="รหัสผ่านต้อง 8 ตัวขึ้นไป"
             )
         
         # Hash password
@@ -149,7 +149,7 @@ async def login(request: LoginRequest):
         if not user:
             return AuthResponse(
                 success=False,
-                message="User doesn't exists"
+                message="ไม่มีผู้ใช้นี้"
             )
         
         # Verify password
@@ -167,7 +167,7 @@ async def login(request: LoginRequest):
         else:
             return AuthResponse(
                 success=False,
-                message="Invalid credentials"
+                message="อีเมลหรือรหัสผิด"
             )
         
     except Exception as error:

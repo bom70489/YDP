@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('username', res.data.username);
       
-      toast.success('Register successfully!');
+      toast.success('ลงทะเบียนสำเร็จ');
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Registration failed';
       toast.error(message);
@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('username', res.data.username);
       
-      toast.success('Login successfully!');
+      toast.success('ล็อกอินสำเร็จ');
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Login failed';
       toast.error(message);
@@ -83,7 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('username');
-    toast.success('Logout successfully!');
+    toast.success('ออกจากระบบสำเร็จ');
   };
 
   return (
