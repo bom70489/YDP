@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { MapPin, Home, DollarSign, Maximize2, Navigation } from 'lucide-react';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Circle } from '@react-google-maps/api';
+import { MapPin, Home, DollarSign, Navigation } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -179,6 +179,47 @@ const MapSearch = () => {
   const handleRadiusChange = (newRadius: number) => {
     setRadiusKm(newRadius);
     searchProperties(center.lat, center.lng, newRadius);
+    
+    // Auto-zoom to fit the circle
+    if (map) {
+      const bounds = new google.maps.LatLngBounds();
+      const circleCenter = new google.maps.LatLng(center.lat, center.lng);
+      
+      // Calculate bounds for the circle
+      const radiusInMeters = newRadius * 1000;
+      
+      // North point
+      const north = google.maps.geometry.spherical.computeOffset(
+        circleCenter,
+        radiusInMeters,
+        0
+      );
+      // South point
+      const south = google.maps.geometry.spherical.computeOffset(
+        circleCenter,
+        radiusInMeters,
+        180
+      );
+      // East point
+      const east = google.maps.geometry.spherical.computeOffset(
+        circleCenter,
+        radiusInMeters,
+        90
+      );
+      // West point
+      const west = google.maps.geometry.spherical.computeOffset(
+        circleCenter,
+        radiusInMeters,
+        270
+      );
+      
+      bounds.extend(north);
+      bounds.extend(south);
+      bounds.extend(east);
+      bounds.extend(west);
+      
+      map.fitBounds(bounds);
+    }
   };
 
   if (!isLoaded || !isInitialized) {
@@ -209,7 +250,7 @@ const MapSearch = () => {
             <MapPin className="w-5 h-5 text-[#b58363]" />
             <span className="text-[#7a4f35] font-medium">รัศมีค้นหา:</span>
             <div className="flex gap-2">
-              {[2, 5, 10, 20].map((radius) => (
+              {[2, 5, 10, 20, 30].map((radius) => (
                 <button
                   key={radius}
                   onClick={() => handleRadiusChange(radius)}
@@ -278,6 +319,24 @@ const MapSearch = () => {
           onClick={handleMapClick}
           options={mapOptions}
         >
+          {/* Search Radius Circle */}
+          <Circle
+            center={center}
+            radius={radiusKm * 1000} // Convert km to meters
+            options={{
+              fillColor: '#b58363',
+              fillOpacity: 0.15,
+              strokeColor: '#b58363',
+              strokeOpacity: 0.8,
+              strokeWeight: 2,
+              clickable: false,
+              draggable: false,
+              editable: false,
+              visible: true,
+              zIndex: 1
+            }}
+          />
+
           {/* Center Marker */}
           <Marker
             position={center}
