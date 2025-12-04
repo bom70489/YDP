@@ -509,3 +509,205 @@ async def get_recommendations(payload: UserInteraction, limit: int = 10):
     final_results = results_sorted[:limit]
 
     return {"count": len(final_results), "results": final_results}
+
+
+@router.get("/debug/geo-check")
+async def debug_geo_check(lat: float, lng: float, radius_km: float = 5.0):
+    """
+    Debug endpoint to check geospatial query results
+    """
+    collection = get_collection()
+    
+    # Check if geospatial index exists
+    indexes = await collection.index_information()
+    has_geo_index = any('2dsphere' in str(idx) for idx in indexes.values())
+    
+    # Run simple query
+    try:
+        pipeline = [
+            {
+                "$geoNear": {
+                    "near": {"type": "Point", "coordinates": [lng, lat]},
+                    "distanceField": "distance",
+                    "maxDistance": radius_km * 1000,
+                    "spherical": True
+                }
+            },
+            {"$limit": 20},
+            {
+                "$project": {
+                    "name_th": 1,
+                    "location_geo": 1,
+                    "distance": 1
+                }
+            }
+        ]
+        
+        cursor = collection.aggregate(pipeline)
+        results = await cursor.to_list(length=20)
+        
+        # Group by coordinates to find duplicates
+        coord_groups = {}
+        for doc in results:
+            coords = doc.get("location_geo", {}).get("coordinates", [])
+            if len(coords) == 2:
+                key = f"{coords[0]:.5f},{coords[1]:.5f}"
+                if key not in coord_groups:
+                    coord_groups[key] = []
+                coord_groups[key].append({
+                    "id": str(doc["_id"]),
+                    "title": doc.get("name_th"),
+                    "distance": round(doc.get("distance", 0) / 1000, 2)
+                })
+        
+        duplicates = {k: v for k, v in coord_groups.items() if len(v) > 1}
+        
+        return {
+            "has_geospatial_index": has_geo_index,
+            "total_results": len(results),
+            "unique_coordinates": len(coord_groups),
+            "duplicate_coordinates": len(duplicates),
+            "duplicates_detail": duplicates,
+            "all_results": [
+                {
+                    "id": str(doc["_id"]),
+                    "title": doc.get("name_th"),
+                    "coordinates": doc.get("location_geo", {}).get("coordinates"),
+                    "distance_km": round(doc.get("distance", 0) / 1000, 2)
+                }
+                for doc in results
+            ]
+        }
+        
+    except Exception as e:
+        return {
+            "error": str(e),
+            "has_geospatial_index": has_geo_index,
+            "message": "Make sure you have a 2dsphere index on location_geo field"
+        }
+
+
+def serialize_doc(doc):
+    """Serialize MongoDB document for JSON response"""
+    # Get coordinates safely
+    location_geo = doc.get("location_geo", {})
+    coords = location_geo.get("coordinates", [0, 0]) if isinstance(location_geo, dict) else [0, 0]
+    
+    # Ensure coords is a list with 2 elements
+    if not isinstance(coords, list) or len(coords) != 2:
+        coords = [0, 0]
+    
+    # Create coordinates object (only if valid)
+    coordinates = None
+    if coords[0] != 0 and coords[1] != 0:
+        coordinates = {
+            "lng": float(coords[0]),
+            "lat": float(coords[1])
+        }
+    
+    return {
+        "_id": str(doc["_id"]),
+        "title": doc.get("name_th", "ไม่มีชื่อ"),
+        "price": safe_float(doc.get("asset_details_selling_price")),
+        "coordinates": coordinates,  # Will be None if invalid
+        "image": doc.get("images_main_id") or "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170",
+        "type_id": doc.get("asset_type_id")
+    }
+
+
+@router.get("/map_search")
+async def map_search(
+    lat: float,
+    lng: float,
+    radius_km: float = 5.0,
+    limit: int = 50
+):
+    """
+    Search properties within a radius from a point (for map display)
+    
+    Args:
+        lat: Latitude of center point
+        lng: Longitude of center point
+        radius_km: Search radius in kilometers (default: 5km)
+        limit: Maximum number of results (default: 50)
+        
+    Returns:
+        Properties within the specified radius with essential map data
+    """
+    collection = get_collection()
+    
+    try:
+        # Use aggregation pipeline for better control
+        pipeline = [
+            {
+                "$geoNear": {
+                    "near": {
+                        "type": "Point",
+                        "coordinates": [lng, lat]
+                    },
+                    "distanceField": "distance",
+                    "maxDistance": radius_km * 1000,  # meters
+                    "spherical": True,
+                    "query": {
+                        "location_geo": {"$exists": True, "$ne": None}
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "name_th": 1,
+                    "asset_details_selling_price": 1,
+                    "location_geo": 1,
+                    "images_main_id": 1,
+                    "asset_type_id": 1,
+                    "distance": 1
+                }
+            },
+            {
+                "$limit": limit
+            }
+        ]
+        
+        cursor = collection.aggregate(pipeline)
+        results = await cursor.to_list(length=limit)
+        
+        # Remove duplicates based on coordinates
+        seen_coords = set()
+        valid_results = []
+        
+        for doc in results:
+            location_geo = doc.get("location_geo")
+            
+            if location_geo:
+                coords = location_geo.get("coordinates") if isinstance(location_geo, dict) else None
+                
+                # Validate coordinates
+                if (coords and 
+                    isinstance(coords, list) and 
+                    len(coords) == 2 and
+                    coords[0] != 0 and 
+                    coords[1] != 0):
+                    
+                    # Create a unique key for this coordinate (rounded to 5 decimals)
+                    coord_key = (round(coords[0], 5), round(coords[1], 5))
+                    
+                    # Skip if we've seen this coordinate before
+                    if coord_key not in seen_coords:
+                        seen_coords.add(coord_key)
+                        valid_results.append(doc)
+        
+        return {
+            "count": len(valid_results),
+            "center": {"lat": lat, "lng": lng},
+            "radius_km": radius_km,
+            "results": [serialize_doc(doc) for doc in valid_results],
+            "debug": {
+                "total_found": len(results),
+                "duplicates_removed": len(results) - len(valid_results)
+            }
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Map search error: {str(e)}")
