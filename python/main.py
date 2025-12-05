@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
 from google import genai
 from dotenv import load_dotenv
-from mangum import Mangum
 
 load_dotenv()
 
@@ -103,10 +102,6 @@ async def health_check():
         "status": "healthy",
         "database": db_status
     }
-
-# ==================== Vercel Handler ====================
-# This is the key part for Vercel deployment
-handler = Mangum(app, lifespan="off")
 
 # For local development
 if __name__ == "__main__":
