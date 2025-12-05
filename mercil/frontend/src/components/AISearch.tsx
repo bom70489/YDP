@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { Search, Sparkles, MapPin, Zap } from 'lucide-react';
 import { SearchContext } from '../context/AppContext';
 import MapSearch from './MapSearch';
@@ -13,10 +13,23 @@ const AISearch = () => {
   const context = useContext(SearchContext);
 
   if (!context) return null;
-  const { search } = context;
+  const { search, clearBoxSearch } = context;
+
+  // Listen for Box Search activity and clear AI Search text
+  useEffect(() => {
+    const handleBoxSearchActivity = () => {
+      console.log('🔍 Clearing AI Search text');
+      setSearchText('');
+    };
+
+    window.addEventListener('boxSearchActivity', handleBoxSearchActivity);
+    return () => window.removeEventListener('boxSearchActivity', handleBoxSearchActivity);
+  }, []);
 
   const handleSearch = () => {
     if (searchMode === 'ai' && searchText.trim()) {
+      // Clear Box Search filters when AI Search is used
+      clearBoxSearch?.();
       search(searchText);
     }
   };
@@ -119,7 +132,8 @@ const AISearch = () => {
                 onBlur={() => setIsFocused(false)}
                 placeholder="บ้านเดี่ยว กว้างๆ ไม่เกิน 5 ล้าน หรือ คอนโด ใกล้ BTS"
                 className="flex-1 text-lg text-[#7a4f35] placeholder-[#b49a8d] 
-                  bg-transparent outline-none font-light"
+                  bg-transparent outline-none focus:outline-none focus:ring-0 
+                  border-none focus:border-none font-light"
               />
 
               {/* Search Button */}

@@ -24,15 +24,20 @@ interface SearchFilters {
 }
 
 interface SearchContextType {
-  properties: Property[];
+  properties: Property[]; // Backward compatibility - returns searchResults or recommendations
+  recommendations: Property[];
+  searchResults: Property[];
   loading: boolean;
   clear: () => void;
   search: (query: string, filters?: SearchFilters) => void;
   loadRecommendations: () => Promise<void>;
+  clearBoxSearch: () => void; // New function to clear box search
 }
 
 const STORAGE_KEY = 'search_properties';
+const RECOMMENDATIONS_KEY = 'recommendations';
 const SEARCH_HISTORY_KEY = 'search_history';
+const FILTERS_STORAGE_KEY = 'search_filters';
 
 // Base URL for Python backend
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -40,13 +45,23 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export const SearchProvider = ({ children }: { children: ReactNode }) => {
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [recommendations, setRecommendations] = useState<Property[]>([]);
+  const [searchResults, setSearchResults] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
   const hasInitialized = useRef(false);
   
+  // Backward compatibility: properties returns searchResults if available, otherwise recommendations
+  const properties = searchResults.length > 0 ? searchResults : recommendations;
+  
   const clear = () => {
-    setProperties([]);
+    setSearchResults([]);
     sessionStorage.removeItem(STORAGE_KEY);
+  };
+
+  const clearBoxSearch = () => {
+    sessionStorage.removeItem(FILTERS_STORAGE_KEY);
+    // Dispatch event to notify Boxsearch component
+    window.dispatchEvent(new Event('clearBoxSearch'));
   };
 
   const loadRecommendations = async () => {
@@ -92,7 +107,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
       const resultsArray = res.data.results || [];
 
       if (resultsArray.length === 0) {
-        setProperties([]);
+        setRecommendations([]);
         return;
       }
 
@@ -128,12 +143,12 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         return property;
       });
 
-      setProperties(mapped);
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+      setRecommendations(mapped);
+      sessionStorage.setItem(RECOMMENDATIONS_KEY, JSON.stringify(mapped));
 
     } catch (err) {
       console.error('❌ Error loading recommendations:', err);
-      setProperties([]);
+      setRecommendations([]);
     } finally {
       setLoading(false);
     }
@@ -196,7 +211,7 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
         return property;
       });
 
-      setProperties(mapped);
+      setSearchResults(mapped);
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
 
       // Update local search history
@@ -236,10 +251,13 @@ export const SearchProvider = ({ children }: { children: ReactNode }) => {
   return (
     <SearchContext.Provider value={{ 
       properties, 
+      recommendations,
+      searchResults,
       search, 
       loading, 
       clear, 
-      loadRecommendations 
+      loadRecommendations,
+      clearBoxSearch
     }}>
       {children}
     </SearchContext.Provider>

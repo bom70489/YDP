@@ -24,6 +24,10 @@ interface PropertyCardProps {
   property: Property;
 }
 
+interface PropertyCardListProps {
+  properties?: Property[];
+}
+
 // Base URL for Python backend
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -199,21 +203,20 @@ const PropertyCard = ({ property }: PropertyCardProps) => {
   );
 };
 
-const PropertyCardList = () => {
+const PropertyCardList = ({ properties: propProperties }: PropertyCardListProps) => {
   const context = useContext(SearchContext);
 
-  if (!context) {
-    console.error('❌ SearchContext is null!');
-    return null;
-  }
-  
-  const { properties, loading } = context;
+  // Use prop if provided, otherwise use context
+  const contextProperties = context?.properties || [];
+  const properties = propProperties !== undefined ? propProperties : contextProperties;
+  const loading = context?.loading || false;
 
   console.log('🔍 PropertyCardList render');
   console.log('📦 Properties:', properties.length);
   console.log('⏳ Loading:', loading);
+  console.log('🎯 Using props:', propProperties !== undefined);
 
-  if (loading) {
+  if (loading && properties.length === 0) {
     console.log('⏳ Showing loading spinner');
     return (
       <div className="w-full flex justify-center items-center py-20">

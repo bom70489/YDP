@@ -44,6 +44,21 @@ const Boxsearch = () => {
   const { search, clear , loadRecommendations } = useContext(SearchContext) || {}
   const hasUserInteracted = useRef(false);
 
+  // Listen for clearBoxSearch event from AI Search
+  useEffect(() => {
+    const handleClearBoxSearch = () => {
+      setPropertyType('');
+      setLocation('');
+      setPriceRange('');
+      setArea('');
+      sessionStorage.removeItem(FILTERS_STORAGE_KEY);
+      hasUserInteracted.current = false;
+    };
+
+    window.addEventListener('clearBoxSearch', handleClearBoxSearch);
+    return () => window.removeEventListener('clearBoxSearch', handleClearBoxSearch);
+  }, []);
+
   useEffect(() => {
     const filters = {
       propertyType,
@@ -65,6 +80,8 @@ const Boxsearch = () => {
 
     if (hasAnyValue) {
       hasUserInteracted.current = true;
+      // Notify AI Search that Box Search is being used
+      window.dispatchEvent(new Event('boxSearchActivity'));
     }
 
     if (!hasAnyValue && hasUserInteracted.current) {
