@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Circle } from '@react-google-maps/api';
-import { MapPin, Home, DollarSign, Navigation } from 'lucide-react';
+import { MapPin, Home , Navigation } from 'lucide-react';
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -13,7 +13,7 @@ interface Property {
     lat: number;
     lng: number;
   };
-  image: string;
+  image: string ;
   type_id: number;
 }
 
@@ -306,7 +306,7 @@ const MapSearch = () => {
         >
           {/* Search Radius Circle */}
           <Circle
-            key={`circle-${center.lat}-${center.lng}-${radiusKm}`}
+            key="search-radius-circle"
             center={center}
             radius={radiusKm * 1000}
             options={{
@@ -363,7 +363,7 @@ const MapSearch = () => {
             >
               <div className="p-2 max-w-[280px] sm:max-w-xs">
                 <img
-                  src={selectedProperty.image}
+                  src={selectedProperty.image || "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1170"}
                   alt={selectedProperty.title}
                   className="w-full h-24 sm:h-32 object-cover rounded-lg mb-2"
                 />
@@ -371,8 +371,7 @@ const MapSearch = () => {
                   {selectedProperty.title}
                 </h3>
                 <div className="flex items-center gap-2 text-[#b58363] font-semibold text-sm sm:text-base">
-                  <DollarSign className="w-4 h-4" />
-                  <span>฿{selectedProperty.price.toLocaleString()}</span>
+                  <span>฿ {selectedProperty.price.toLocaleString()}</span>
                 </div>
                 <a
                   href={`/property/${selectedProperty._id}`}
