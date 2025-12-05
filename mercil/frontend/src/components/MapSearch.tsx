@@ -54,12 +54,9 @@ const MapSearch = () => {
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const libraries = useMemo(() => ['geometry'], []);
-
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-    libraries,
   });
 
   // Responsive map height
