@@ -20,6 +20,10 @@ import {
   BookOpen,
   MapPin,
   Navigation,
+  Car,
+  Bike,
+  PersonStanding,
+  Clock,
 } from "lucide-react";
 
 // Fix Leaflet icon issue
@@ -105,6 +109,47 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// ฟังก์ชันคำนวณเวลาเดินทาง
+function calculateTravelTime(distanceKm: number): {
+  driving: { time: number; unit: string; display: string };
+  motorcycle: { time: number; unit: string; display: string };
+  walking: { time: number; unit: string; display: string };
+} {
+  // ความเร็วเฉลี่ย (กม./ชม.)
+  const speeds = {
+    driving: 60,      // รถยนต์ในเมือง
+    motorcycle: 50,   // รถมอเตอร์ไซค์
+    walking: 5,       // เดินเท้า
+  };
+
+  const formatTime = (hours: number) => {
+    if (hours < 1) {
+      const minutes = Math.round(hours * 60);
+      return { time: minutes, unit: 'นาที', display: `${minutes} นาที` };
+    } else if (hours < 24) {
+      const hrs = Math.floor(hours);
+      const mins = Math.round((hours - hrs) * 60);
+      if (mins === 0) {
+        return { time: hrs, unit: 'ชั่วโมง', display: `${hrs} ชั่วโมง` };
+      }
+      return { time: hrs, unit: 'ชั่วโมง', display: `${hrs} ชม. ${mins} นาที` };
+    } else {
+      const days = Math.floor(hours / 24);
+      const remainingHours = Math.round(hours % 24);
+      if (remainingHours === 0) {
+        return { time: days, unit: 'วัน', display: `${days} วัน` };
+      }
+      return { time: days, unit: 'วัน', display: `${days} วัน ${remainingHours} ชม.` };
+    }
+  };
+
+  return {
+    driving: formatTime(distanceKm / speeds.driving),
+    motorcycle: formatTime(distanceKm / speeds.motorcycle),
+    walking: formatTime(distanceKm / speeds.walking),
+  };
 }
 
 // Component สำหรับปรับ bounds ของแผนที่
@@ -304,6 +349,16 @@ const ShowDetail = () => {
     const fromPath = (location.state as any)?.from || '/';
     navigate(fromPath, { replace: false });
   };
+
+  // Calculate distance and travel time
+  const distanceKm = userLocation && property?.coordinates?.lat && property?.coordinates?.lng
+    ? calculateDistance(
+        userLocation.lat, userLocation.lng,
+        property.coordinates.lat, property.coordinates.lng
+      )
+    : null;
+
+  const travelTimes = distanceKm ? calculateTravelTime(distanceKm) : null;
 
   if (loading) {
     return (
@@ -554,15 +609,12 @@ const ShowDetail = () => {
                     </MapContainer>
 
                     {/* Map Overlay - Distance Badge */}
-                    {userLocation && (
+                    {userLocation && distanceKm && (
                       <div className="absolute top-4 right-4 z-10 bg-white/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border-2 border-amber-600">
                         <div className="flex items-center gap-2">
                           <Navigation className="w-4 h-4 text-amber-600" />
                           <span className="font-bold text-amber-700">
-                            {calculateDistance(
-                              userLocation.lat, userLocation.lng,
-                              property.coordinates.lat, property.coordinates.lng
-                            ).toFixed(2)} km
+                            {distanceKm.toFixed(2)} km
                           </span>
                         </div>
                       </div>
@@ -583,19 +635,66 @@ const ShowDetail = () => {
                         </div>
                       </div>
 
-                      {/* Distance Badge */}
-                      {userLocation && (
-                        <div className="bg-white p-3 rounded-lg border-2 border-amber-300">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-stone-600">ระยะทางจากคุณ:</span>
-                            <span className="text-lg font-bold text-amber-700">
-                              📍 {calculateDistance(
-                                userLocation.lat, userLocation.lng,
-                                property.coordinates.lat, property.coordinates.lng
-                              ).toFixed(2)} กม.
-                            </span>
+                      {/* Distance & Travel Time Cards */}
+                      {userLocation && distanceKm && travelTimes && (
+                        <>
+                          {/* Distance Badge */}
+                          <div className="bg-white p-3 rounded-lg border-2 border-amber-300">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-stone-600">ระยะทางจากคุณ:</span>
+                              <span className="text-lg font-bold text-amber-700">
+                                📍 {distanceKm.toFixed(2)} กม.
+                              </span>
+                            </div>
                           </div>
-                        </div>
+
+                          {/* Travel Time Cards */}
+                          <div className="bg-white p-4 rounded-lg border-2 border-amber-300">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Clock className="w-5 h-5 text-amber-600" />
+                              <h4 className="font-bold text-stone-700">เวลาเดินทางโดยประมาณ:</h4>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {/* Driving */}
+                              <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <Car className="w-5 h-5 text-blue-600" />
+                                  <span className="text-sm font-medium text-stone-700">รถยนต์</span>
+                                </div>
+                                <span className="text-sm font-bold text-blue-700">
+                                  🚗 {travelTimes.driving.display}
+                                </span>
+                              </div>
+
+                              {/* Motorcycle */}
+                              <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <Bike className="w-5 h-5 text-green-600" />
+                                  <span className="text-sm font-medium text-stone-700">มอเตอร์ไซค์</span>
+                                </div>
+                                <span className="text-sm font-bold text-green-700">
+                                  🏍️ {travelTimes.motorcycle.display}
+                                </span>
+                              </div>
+
+                              {/* Walking */}
+                              <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                  <PersonStanding className="w-5 h-5 text-orange-600" />
+                                  <span className="text-sm font-medium text-stone-700">เดินเท้า</span>
+                                </div>
+                                <span className="text-sm font-bold text-orange-700">
+                                  🚶 {travelTimes.walking.display}
+                                </span>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-stone-500 mt-3 text-center">
+                              * เวลาเดินทางคำนวณจากเส้นทางตรง ไม่รวมสภาพการจราจร
+                            </p>
+                          </div>
+                        </>
                       )}
 
                       {/* Action Buttons */}
